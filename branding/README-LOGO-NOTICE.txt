@@ -1,1 +1,0 @@
-The README uses the clean Velaris TV logo stored at branding/velaris-tv-logo.png.
