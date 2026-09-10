@@ -3,7 +3,7 @@
 Native Android / Google TV shell for Velaris.
 
 <p align="center">
-  <img src="branding/velaris-tv-logo.png" alt="Velaris TV" width="260">
+  <img src="branding/velaris-tv-logo.webp" alt="Velaris TV" width="260">
 </p>
 
 Velaris TV turns a self-hosted Velaris Web instance into a dedicated TV app for Android TV and Google TV devices.
