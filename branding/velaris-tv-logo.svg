@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Velaris TV</title>
+  <desc id="desc">Velaris V logo in cyan, blue, violet and magenta.</desc>
+  <defs>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37e8ff"/>
+      <stop offset="0.34" stop-color="#0876ff"/>
+      <stop offset="0.72" stop-color="#4b39ff"/>
+      <stop offset="1" stop-color="#c55cff"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#f6f2ff"/>
+      <stop offset="0.28" stop-color="#47d9ff"/>
+      <stop offset="0.58" stop-color="#5f37ff"/>
+      <stop offset="1" stop-color="#ff55de"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="#000"/>
+  <g filter="url(#glow)">
+    <path d="M72 78 C156 88 209 115 256 222 C231 178 192 153 145 133 C184 192 220 278 256 405 C204 326 160 243 116 155 C94 113 82 93 72 78Z" fill="url(#left)" stroke="#9ff7ff" stroke-width="3"/>
+    <path d="M440 78 C356 88 303 115 256 222 C281 178 320 153 367 133 C328 192 292 278 256 405 C308 326 352 243 396 155 C418 113 430 93 440 78Z" fill="url(#right)" stroke="#ffc7ff" stroke-width="3"/>
+    <path d="M112 104 C176 124 216 163 256 256 C236 217 205 185 164 160 C195 222 226 304 256 405" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="3"/>
+    <path d="M400 104 C336 124 296 163 256 256 C276 217 307 185 348 160 C317 222 286 304 256 405" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="3"/>
+  </g>
+</svg>
