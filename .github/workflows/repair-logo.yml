@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'branding/velaris-tv-logo-readme.b64'
+      - '.github/workflows/repair-logo.yml'
   workflow_dispatch:
 
 permissions:
