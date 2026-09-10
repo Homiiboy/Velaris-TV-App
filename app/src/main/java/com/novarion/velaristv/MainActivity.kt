@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
@@ -164,7 +165,7 @@ class MainActivity : Activity() {
             setHintTextColor(Color.rgb(110, 110, 130))
             setTextColor(Color.WHITE)
             textSize = 18f
-            singleLine = true
+            setSingleLine(true)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             backgroundTintList = ColorStateList.valueOf(Color.rgb(105, 78, 255))
             setPadding(dp(14), dp(10), dp(14), dp(10))
@@ -322,7 +323,9 @@ class MainActivity : Activity() {
             setAcceptThirdPartyCookies(browser, true)
         }
 
-        if (BuildConfig.DEBUG) {
+        val isDebuggable =
+            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebuggable) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
