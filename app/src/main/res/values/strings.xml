@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Velaris</string>
+    <string name="server_title">Velaris verbinden</string>
+    <string name="server_description">Gib die Adresse deiner Velaris-Web-Instanz ein.</string>
+    <string name="server_hint">http://192.168.1.50:8097</string>
+    <string name="connect">Verbinden</string>
+    <string name="retry">Erneut versuchen</string>
+    <string name="change_server">Server ändern</string>
+</resources>
