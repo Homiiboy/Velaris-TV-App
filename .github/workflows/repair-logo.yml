@@ -1,0 +1,44 @@
+name: Repair Velaris logo assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'branding/velaris-tv-logo-readme.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild clean logo assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p branding app/src/main/res/drawable-nodpi
+          base64 --decode branding/velaris-tv-logo-readme.b64 > branding/velaris-tv-logo.png
+          cp branding/velaris-tv-logo.png app/src/main/res/drawable-nodpi/velaris_logo.png
+          sed -i 's#branding/velaris-tv-logo.svg#branding/velaris-tv-logo.png#g' README.md
+          file branding/velaris-tv-logo.png
+
+      - name: Commit repaired assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md branding/velaris-tv-logo.png app/src/main/res/drawable-nodpi/velaris_logo.png
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'fix: repair Velaris logo assets'
+          git push origin HEAD:main
