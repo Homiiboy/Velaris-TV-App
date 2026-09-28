@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.*
+import androidx.media3.common.util.UnstableApi
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -185,6 +186,7 @@ class MainActivity : Activity() {
         }
     }
 
+    @UnstableApi
     private fun playNative(id:String, startTicks:Long=0L) {
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
