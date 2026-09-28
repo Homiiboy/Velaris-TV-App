@@ -58,9 +58,19 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 - Hardened playback progress connection cleanup
 - Existing Jellyfin user account acts as the active Velaris profile
 
+## Phase 5 — Complete
+
+- TV profile entry point with Jellyfin user discovery
+- Safe account switching through Jellyfin re-authentication
+- Mark movies and episodes as watched / unwatched
+- Watch-state synchronization through Jellyfin
+- Existing personalized recommendations and My List retained per account
+- Release identity aligned to Velaris TV 0.5.0
+- Jellyfin client headers aligned to the app version
+
 ## Roadmap
 
-Phase 4 is feature-complete. Future phases can focus on multi-user profile switching on one device, deeper recommendation logic, watch-state controls, accessibility and final release/store polish.
+Phase 5 is feature-complete. The next milestone can focus on release hardening: signed release builds, store assets, accessibility review, larger-scale TV testing and final performance work.
 
 ## Build
 
@@ -81,7 +91,7 @@ GitHub Actions builds, lints and uploads a debug APK on every push to `main`.
 ## App identity
 
 - Application ID: `com.novarion.velaristv`
-- Version: `0.2.0`
+- Version: `0.5.0`
 - Minimum Android: API 26
 - Target API: 34
 - Compile API: 36
