@@ -179,7 +179,8 @@ class MainActivity : Activity() {
                     val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
                     root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
-                    val ticks=x.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L\n                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
+                    val ticks=x.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
