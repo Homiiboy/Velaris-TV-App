@@ -113,7 +113,7 @@ class PlayerActivity : Activity() {
         try {
             c.requestMethod="POST"; c.doOutput=true; c.connectTimeout=8000; c.readTimeout=12000
             c.setRequestProperty("Content-Type","application/json")
-            c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.3.0", Token="$token"""")
+            c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.5.0", Token="$token"""")
             c.outputStream.use { it.write(body.toByteArray()) }
             if(c.responseCode !in 200..299) throw IllegalStateException("PlaybackInfo HTTP ${c.responseCode}")
             val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
@@ -205,7 +205,7 @@ class PlayerActivity : Activity() {
                 try {
                 c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 6000; c.readTimeout = 6000
                 c.setRequestProperty("Content-Type","application/json")
-                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0", Token="$token"""")
+                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.5.0", Token="$token"""")
                 c.outputStream.use { it.write(body.toByteArray()) }
                 c.responseCode
                 } finally { c.disconnect() }
