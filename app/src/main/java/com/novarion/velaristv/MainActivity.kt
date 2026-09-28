@@ -428,7 +428,7 @@ class MainActivity : Activity() {
         try {
             conn.requestMethod=method; conn.connectTimeout=8000; conn.readTimeout=12000
             conn.setRequestProperty("Accept","application/json")
-            conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
+            conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.5.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
             if(body!=null){ conn.doOutput=true; conn.setRequestProperty("Content-Type","application/json"); conn.outputStream.use{it.write(body.toByteArray())} }
             val code=conn.responseCode
             val text=(if(code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
