@@ -78,6 +78,7 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 - Player closes cleanly when playback finishes without a next episode
 - Release-candidate identity aligned to Velaris TV 0.6.0
 - Jellyfin client headers aligned to the release-candidate version
+- Intro Skipper / Jellyfin Media Segments integration with a TV-friendly "Intro überspringen" button
 
 ## Roadmap
 
