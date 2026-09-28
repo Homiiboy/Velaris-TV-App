@@ -68,9 +68,20 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 - Release identity aligned to Velaris TV 0.5.0
 - Jellyfin client headers aligned to the app version
 
+## Phase 6 — Complete (Release Candidate)
+
+- Parallelized network/image work for faster TV home loading
+- Recoverable home-screen server/offline error state with retry
+- Removed unnecessary keep-awake behavior outside playback
+- Accessibility labels and minimum TV button target sizing
+- Continuous series autoplay using Jellyfin NextUp discovery
+- Player closes cleanly when playback finishes without a next episode
+- Release-candidate identity aligned to Velaris TV 0.6.0
+- Jellyfin client headers aligned to the release-candidate version
+
 ## Roadmap
 
-Phase 5 is feature-complete. The next milestone can focus on release hardening: signed release builds, store assets, accessibility review, larger-scale TV testing and final performance work.
+Phase 6 is feature-complete as the first release-candidate milestone. Remaining release work is operational: real-device regression testing, signing credentials, final store screenshots/listing and production publishing.
 
 ## Build
 
@@ -91,7 +102,7 @@ GitHub Actions builds, lints and uploads a debug APK on every push to `main`.
 ## App identity
 
 - Application ID: `com.novarion.velaristv`
-- Version: `0.5.0`
+- Version: `0.6.0`
 - Minimum Android: API 26
 - Target API: 34
 - Compile API: 36
