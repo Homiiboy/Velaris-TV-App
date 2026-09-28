@@ -1,0 +1,38 @@
+name: Install new Velaris app icon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'branding/new-icon.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace old Velaris icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode branding/new-icon.b64 > branding/velaris-tv-logo.webp
+          cp branding/velaris-tv-logo.webp app/src/main/res/drawable-nodpi/velaris_logo.webp
+          file branding/velaris-tv-logo.webp
+          rm branding/new-icon.b64
+          rm .github/workflows/install-new-icon.yml
+
+      - name: Commit new icon
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: replace Velaris app icon'
+          git push origin HEAD:main
