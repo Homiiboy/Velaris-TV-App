@@ -280,7 +280,8 @@ class MainActivity : Activity() {
                         val ticks=ep.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
                         val number=ep.optInt("IndexNumber",0)
                         val name=ep.optString("Name")
-                        root.addView(button((if(number>0) "$number. " else "")+name) { startEpisode(eid,ticks) },params(-1,62,8))
+                        val nextId=episodes.getOrNull(episodes.indexOf(ep)+1)?.optString("Id").orEmpty()
+                        root.addView(button((if(number>0) "$number. " else "")+name) { startEpisode(eid,ticks,nextId) },params(-1,62,8))
                     }
                     root.addView(button("Zurück zur Serie") { showSeries(seriesId) },params(260,56,18))
                     setContentView(ScrollView(this).apply { addView(root) })
@@ -289,7 +290,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startEpisode(id:String,ticks:Long)=playNative(id,ticks)
+    private fun startEpisode(id:String,ticks:Long,nextId:String="")=playNative(id,ticks,nextId)
 
     private fun showDetails(id:String) {
         io.execute {
@@ -322,13 +323,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun playNative(id:String, startTicks:Long=0L) {
+    private fun playNative(id:String, startTicks:Long=0L, nextId:String="") {
         if(id.isBlank() || server.isBlank() || token.isBlank() || destroyed) return toast("Wiedergabe kann nicht gestartet werden")
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
             putExtra("token",token)
             putExtra("itemId",id)
             putExtra("startTicks",startTicks)
+            putExtra("nextItemId",nextId)
         })
     }
 
