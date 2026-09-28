@@ -30,6 +30,7 @@ class PlayerActivity : Activity() {
     private var startTicks = 0L
     private var sessionStarted = false
     private var stoppedReported = false
+    private var nextItemId = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +38,7 @@ class PlayerActivity : Activity() {
         token = intent.getStringExtra("token").orEmpty()
         itemId = intent.getStringExtra("itemId").orEmpty()
         startTicks = intent.getLongExtra("startTicks", 0L)
+        nextItemId = intent.getStringExtra("nextItemId").orEmpty()
         if (server.isBlank() || token.isBlank() || itemId.isBlank()) {
             android.widget.Toast.makeText(this, "Ungültige Wiedergabeparameter", android.widget.Toast.LENGTH_LONG).show()
             finish()
@@ -67,7 +69,14 @@ class PlayerActivity : Activity() {
                 else if (!isPlaying && sessionStarted) report("Progress")
             }
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) reportStoppedOnce()
+                if (state == Player.STATE_ENDED) {
+                    reportStoppedOnce()
+                    if(nextItemId.isNotBlank()) {
+                        itemId=nextItemId; nextItemId=""; stoppedReported=false; sessionStarted=false
+                        exo.setMediaItem(MediaItem.fromUri("$server/Videos/$itemId/stream?static=true&api_key=$token"))
+                        exo.prepare(); exo.playWhenReady=true
+                    }
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 android.widget.Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.errorCodeName}", android.widget.Toast.LENGTH_LONG).show()
