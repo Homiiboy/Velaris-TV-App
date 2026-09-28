@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import org.json.JSONObject
@@ -18,14 +19,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
-@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
+@UnstableApi
 class PlayerActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private var player: ExoPlayer? = null
     private var itemId = ""
     private var server = ""
     private var token = ""
-    private var userId = ""
     private var startTicks = 0L
     private var sessionStarted = false
 
@@ -33,7 +33,6 @@ class PlayerActivity : Activity() {
         super.onCreate(savedInstanceState)
         server = intent.getStringExtra("server").orEmpty()
         token = intent.getStringExtra("token").orEmpty()
-        userId = intent.getStringExtra("userId").orEmpty()
         itemId = intent.getStringExtra("itemId").orEmpty()
         startTicks = intent.getLongExtra("startTicks", 0L)
         immersive()
