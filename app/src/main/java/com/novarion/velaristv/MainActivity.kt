@@ -102,6 +102,7 @@ class MainActivity : Activity() {
         nav.addView(button("Startseite") { showHome() }, LinearLayout.LayoutParams(dp(150),dp(54)))
         nav.addView(button("Filme") { showLibrary("Filme","Movie") }, LinearLayout.LayoutParams(dp(130),dp(54)))
         nav.addView(button("Serien") { showLibrary("Serien","Series") }, LinearLayout.LayoutParams(dp(130),dp(54)))
+        nav.addView(button("Meine Liste") { showFavorites() }, LinearLayout.LayoutParams(dp(160),dp(54)))
         nav.addView(button("Suche") { showSearch() }, LinearLayout.LayoutParams(dp(130),dp(54)))
         top.addView(nav, LinearLayout.LayoutParams(0,dp(62),1f))
         top.addView(button("⚙") { showSettingsDialog() }, LinearLayout.LayoutParams(dp(72),dp(54)))
@@ -119,11 +120,13 @@ class MainActivity : Activity() {
                 val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
                 val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
                 val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
+                val favorites = items("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
                     addRow("Neu bei Velaris", latest)
+                    addRow("Meine Liste", favorites)
                     addRow("Filme", movies)
                     addRow("Serien", series)
                 }
@@ -198,6 +201,24 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showFavorites() {
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+        root.addView(TextView(this).apply { text="Meine Liste"; textSize=32f; setTextColor(Color.WHITE) })
+        root.addView(ProgressBar(this))
+        setContentView(ScrollView(this).apply { addView(root) })
+        io.execute {
+            try {
+                val data=items("/Users/$userId/Items?Recursive=true&Limit=100&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    root.removeViewAt(1); homeRoot=root
+                    if(data.isEmpty()) root.addView(TextView(this).apply { text="Deine Liste ist noch leer."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    else addRow("Favoriten",data)
+                    root.addView(button("Zurück") { showHome() },params(220,56,16))
+                }
+            } catch(e:Exception){ runOnUiThread{toast("Meine Liste konnte nicht geladen werden")} }
+        }
+    }
+
     private fun showSearch() {
         val input=EditText(this).apply { hint="Filme und Serien suchen"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine() }
         val root=setupPage("Suche","Durchsuche deine Jellyfin-Mediathek",input)
@@ -235,6 +256,8 @@ class MainActivity : Activity() {
                     val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
                     root.addView(TextView(this).apply { text=series.optString("Name"); textSize=34f; setTextColor(Color.WHITE) })
                     root.addView(TextView(this).apply { text=series.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); maxLines=4 },params(-1,-2,12))
+                    val favorite=series.optJSONObject("UserData")?.optBoolean("IsFavorite",false) ?: false
+                    root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(seriesId,!favorite) { showSeries(seriesId) } },params(260,56,12))
                     seasons.forEach { season ->
                         root.addView(button(season.optString("Name","Staffel")) { showSeason(seriesId,season.optString("Id")) },params(360,58,12))
                     }
@@ -277,12 +300,25 @@ class MainActivity : Activity() {
                     val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
                     root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
-                    val ticks=x.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+                    val userData=x.optJSONObject("UserData")
+                    val ticks=userData?.optLong("PlaybackPositionTicks",0L) ?: 0L
+                    val favorite=userData?.optBoolean("IsFavorite",false) ?: false
                     root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
+                    root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(id,!favorite) { showDetails(id) } },params(260,58,10))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
             } catch(e:Exception){ runOnUiThread{toast("Details konnten nicht geladen werden")} }
+        }
+    }
+
+    private fun setFavorite(id:String, favorite:Boolean, done:()->Unit) {
+        if(id.isBlank()) return
+        io.execute {
+            try {
+                request("/Users/$userId/FavoriteItems/$id", if(favorite) "POST" else "DELETE")
+                runOnUiThread { toast(if(favorite) "Zu Meine Liste hinzugefügt" else "Aus Meine Liste entfernt"); done() }
+            } catch(e:Exception) { runOnUiThread { toast("Meine Liste konnte nicht geändert werden") } }
         }
     }
 
