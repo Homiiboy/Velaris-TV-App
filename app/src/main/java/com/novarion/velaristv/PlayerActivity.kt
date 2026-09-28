@@ -204,6 +204,9 @@ class PlayerActivity : Activity() {
         activeSegment=segment
         val button=skipIntroButton ?: return
         if(segment!=null) {
+            val prefs=getSharedPreferences("velaris_tv",MODE_PRIVATE)
+            val auto=when(segment.type.lowercase()) { "intro"->prefs.getBoolean("auto_skip_intro",false); "recap"->prefs.getBoolean("auto_skip_recap",false); "outro","credits"->prefs.getBoolean("auto_skip_credits",false); else->false }
+            if(auto) { p.seekTo(segment.endMs); button.visibility=View.GONE; return }
             button.text=when(segment.type.lowercase()) {
                 "recap" -> "Rückblick überspringen"
                 "outro","credits" -> if(nextItemId.isNotBlank()) "Nächste Folge" else "Abspann überspringen"
