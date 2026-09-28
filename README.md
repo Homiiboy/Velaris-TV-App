@@ -37,9 +37,20 @@ http://192.168.1.50:8096
 
 Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance is not required by the TV app.
 
+## Phase 3 — Complete
+
+- Context-aware TV back navigation
+- Rich episode cards with thumbnails and descriptions
+- Improved D-pad focus behavior
+- Jellyfin PlaybackInfo negotiation
+- Direct-play media source selection with safe legacy fallback
+- Jellyfin transcoding URL support when supplied by the server
+- User-aware playback negotiation
+- Automatic next-episode playback retained across the native player flow
+
 ## Roadmap
 
-Phase 2 is feature-complete. Future work can focus on Phase 3 polish such as richer episode cards, playback selection/transcoding, improved contextual back navigation and further streaming-TV UI refinement.
+Phase 3 is feature-complete. Future work can focus on Phase 4 features such as audio/subtitle track selection, profiles, recommendations, advanced home personalization and further visual refinement.
 
 ## Build
 
