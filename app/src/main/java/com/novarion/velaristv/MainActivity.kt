@@ -354,6 +354,7 @@ class MainActivity : Activity() {
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
             putExtra("token",token)
+            putExtra("userId",userId)
             putExtra("itemId",id)
             putExtra("startTicks",startTicks)
             putExtra("nextItemId",nextId)
