@@ -222,6 +222,7 @@ class MainActivity : Activity() {
         }
     }
 
+    @UnstableApi
     private fun showSeries(seriesId:String) {
         io.execute {
             try {
