@@ -179,7 +179,7 @@ class MainActivity : Activity() {
                     val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
                     root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
-                    root.addView(button("▶ Abspielen") { playInJellyfin(id) },params(260,64,22))
+                    val ticks=x.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L\n                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
@@ -187,10 +187,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun playInJellyfin(id:String) {
-        // Phase 2 foundation: native catalogue; playback handoff remains compatible with Jellyfin.
-        val url="$server/web/index.html#!/details?id=$id"
-        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url)))
+    private fun playNative(id:String, startTicks:Long=0L) {
+        startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
+            putExtra("server",server)
+            putExtra("token",token)
+            putExtra("userId",userId)
+            putExtra("itemId",id)
+            putExtra("startTicks",startTicks)
+        })
     }
 
     private fun loadImage(view:ImageView,id:String,type:String,width:Int) {
