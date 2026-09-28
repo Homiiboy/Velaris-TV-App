@@ -117,6 +117,7 @@ class MainActivity : Activity() {
         nav.addView(button("Meine Liste") { showFavorites() }, LinearLayout.LayoutParams(dp(160),dp(54)))
         nav.addView(button("Suche") { showSearch() }, LinearLayout.LayoutParams(dp(130),dp(54)))
         top.addView(nav, LinearLayout.LayoutParams(0,dp(62),1f))
+        top.addView(button("👤") { showProfiles() }, LinearLayout.LayoutParams(dp(72),dp(54)))
         top.addView(button("⚙") { showSettingsDialog() }, LinearLayout.LayoutParams(dp(72),dp(54)))
         root.addView(top)
         root.addView(TextView(this).apply { text="Dein Velaris"; setTextColor(Color.WHITE); textSize=32f; setPadding(0,dp(16),0,dp(8)) })
@@ -337,12 +338,49 @@ class MainActivity : Activity() {
                     val userData=x.optJSONObject("UserData")
                     val ticks=userData?.optLong("PlaybackPositionTicks",0L) ?: 0L
                     val favorite=userData?.optBoolean("IsFavorite",false) ?: false
+                    val played=userData?.optBoolean("Played",false) ?: false
                     root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
                     root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(id,!favorite) { showDetails(id) } },params(260,58,10))
+                    root.addView(button(if(played) "↺ Als ungesehen markieren" else "✓ Als gesehen markieren") { setPlayed(id,!played) { showDetails(id) } },params(300,58,10))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
             } catch(e:Exception){ runOnUiThread{toast("Details konnten nicht geladen werden")} }
+        }
+    }
+
+    private fun showProfiles() {
+        rememberBack { showHome() }
+        io.execute {
+            try {
+                val users=request("/Users","GET",null,true).optJSONArray("array")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(72),dp(36),dp(72),dp(36)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply { text="Profile"; textSize=32f; setTextColor(Color.WHITE); gravity=Gravity.CENTER },params(-1,-2,0))
+                    if(users==null || users.length()==0) root.addView(TextView(this).apply { text="Keine weiteren Profile verfügbar."; setTextColor(Color.LTGRAY); textSize=17f },params(-1,-2,18))
+                    else for(i in 0 until users.length()) {
+                        val u=users.getJSONObject(i); val uid=u.optString("Id"); val name=u.optString("Name","Profil")
+                        root.addView(button(if(uid==userId) "✓ $name" else name) {
+                            if(uid==userId) showHome() else {
+                                token=""; userId=""; prefs.edit().remove("access_token").remove("user_id").apply()
+                                toast("Bitte als $name anmelden"); showLogin()
+                            }
+                        },params(320,60,12))
+                    }
+                    root.addView(button("Zurück") { showHome() },params(220,56,18))
+                    setContentView(root)
+                }
+            } catch(e:Exception) { runOnUiThread { toast("Profile konnten nicht geladen werden") } }
+        }
+    }
+
+    private fun setPlayed(id:String, played:Boolean, done:()->Unit) {
+        if(id.isBlank()) return
+        io.execute {
+            try {
+                request("/Users/$userId/PlayedItems/$id", if(played) "POST" else "DELETE")
+                runOnUiThread { toast(if(played) "Als gesehen markiert" else "Als ungesehen markiert"); done() }
+            } catch(e:Exception) { runOnUiThread { toast("Wiedergabestatus konnte nicht geändert werden") } }
         }
     }
 
