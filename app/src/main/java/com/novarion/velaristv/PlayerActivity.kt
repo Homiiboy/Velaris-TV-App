@@ -47,6 +47,9 @@ class PlayerActivity : Activity() {
     private var statsText: TextView? = null
     private var lastPlaybackLabel = "Auto"
     private var lastMediaInfo = ""
+    private var playerViewRef: PlayerView? = null
+    private var releasedPositionMs = 0L
+    private var shouldResumeAfterStop = false
     private val introUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val introUiTick = object : Runnable {
         override fun run() {
@@ -77,6 +80,7 @@ class PlayerActivity : Activity() {
             controllerHideOnTouch = true
             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
         }
+        playerViewRef=playerView
         root.addView(playerView, FrameLayout.LayoutParams(-1, -1))
         root.addView(TextView(this).apply {
             text = "VELARIS"; textSize = 16f; setTextColor(0x99FFFFFF.toInt())
@@ -141,7 +145,7 @@ class PlayerActivity : Activity() {
                 val c=URL("$server/Shows/NextUp?UserId=$userId&StartItemId=$id&Limit=1").openConnection() as HttpURLConnection
                 try {
                     c.connectTimeout=6000; c.readTimeout=8000
-                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
+                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0", Token="$token"""")
                     if(c.responseCode in 200..299) {
                         val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
                         val arr=json.optJSONArray("Items")
@@ -178,7 +182,7 @@ class PlayerActivity : Activity() {
                 try {
                     c.connectTimeout=6000; c.readTimeout=8000
                     c.setRequestProperty("Accept","application/json")
-                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
+                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0", Token="$token"""")
                     if(c.responseCode in 200..299) {
                         val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
                         val arr=json.optJSONArray("Items")
@@ -226,7 +230,7 @@ class PlayerActivity : Activity() {
         try {
             c.requestMethod="POST"; c.doOutput=true; c.connectTimeout=8000; c.readTimeout=12000
             c.setRequestProperty("Content-Type","application/json")
-            c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
+            c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0", Token="$token"""")
             c.outputStream.use { it.write(body.toByteArray()) }
             if(c.responseCode !in 200..299) throw IllegalStateException("PlaybackInfo HTTP ${c.responseCode}")
             val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
@@ -297,9 +301,25 @@ class PlayerActivity : Activity() {
     }
 
     override fun onStop() {
+        val p=player
+        if(p!=null) { releasedPositionMs=p.currentPosition; shouldResumeAfterStop=!isFinishing }
         reportStoppedOnce()
-        player?.release(); player = null
+        p?.release(); player=null
         super.onStop()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if(player==null && shouldResumeAfterStop && server.isNotBlank() && itemId.isNotBlank()) {
+            val exo=ExoPlayer.Builder(this).build()
+            player=exo; playerViewRef?.player=exo
+            exo.addListener(object:Player.Listener {
+                override fun onIsPlayingChanged(isPlaying:Boolean) { if(isPlaying && !sessionStarted) { sessionStarted=true; report("Playing") } else if(!isPlaying && sessionStarted) report("Progress") }
+                override fun onTracksChanged(tracks:Tracks) { availableTracks=tracks }
+            })
+            stoppedReported=false; sessionStarted=false; shouldResumeAfterStop=false
+            preparePlayback(exo,itemId,releasedPositionMs*10_000L)
+        }
     }
 
     override fun onDestroy() { introUiHandler.removeCallbacks(introUiTick); io.shutdownNow(); super.onDestroy() }
@@ -329,7 +349,7 @@ class PlayerActivity : Activity() {
                 try {
                 c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 6000; c.readTimeout = 6000
                 c.setRequestProperty("Content-Type","application/json")
-                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
+                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0", Token="$token"""")
                 c.outputStream.use { it.write(body.toByteArray()) }
                 c.responseCode
                 } finally { c.disconnect() }
