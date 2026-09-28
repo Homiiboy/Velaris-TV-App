@@ -259,6 +259,7 @@ class MainActivity : Activity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     view.requestFocus(View.FOCUS_DOWN)
+                    applyVelarisTvTheme(view)
                     applyImmersiveMode()
                 }
 
@@ -340,6 +341,42 @@ class MainActivity : Activity() {
         setContentView(container)
         browser.requestFocus(View.FOCUS_DOWN)
         browser.loadUrl(serverUrl)
+    }
+
+    private fun applyVelarisTvTheme(view: WebView) {
+        val css = """
+            :root{--v:#7c5cff;--bg:#08080d;--panel:#111119;--muted:#b7b7c5}
+            html,body,.backgroundContainer,.skinBody{background:var(--bg)!important;color:#fff!important}
+            .skinHeader,.headerTop,.headerTabs{background:linear-gradient(180deg,rgba(8,8,13,.98),rgba(8,8,13,.72),transparent)!important;box-shadow:none!important}
+            .headerTabs .emby-tab-button,.headerButton,.paper-icon-button-light{color:#fff!important;opacity:.86}
+            .headerTabs .emby-tab-button-active{color:#fff!important;opacity:1}
+            .headerTabs .emby-tab-button-active::after{background:var(--v)!important;height:3px!important;border-radius:99px!important}
+            .pageTitle,.sectionTitle,h1,h2,h3{color:#fff!important;font-weight:700!important;letter-spacing:-.02em!important}
+            .sectionTitle{font-size:1.55rem!important}.itemsContainer{gap:.75rem!important}
+            .card{border-radius:7px!important;overflow:visible!important;transition:transform 150ms ease,filter 150ms ease!important}
+            .cardBox,.cardScalable,.cardImageContainer{border-radius:7px!important;overflow:hidden!important;background:var(--panel)!important}
+            .card:focus-within,.card.focused,.card:hover{transform:scale(1.09)!important;z-index:20!important;filter:drop-shadow(0 14px 22px rgba(0,0,0,.65))!important}
+            .card:focus-within .cardBox,.card.focused .cardBox{outline:3px solid var(--v)!important;outline-offset:3px!important}
+            .cardText{color:#fff!important}.cardText-secondary{color:var(--muted)!important}
+            .emby-button.button-submit,.raised.button-submit,.detailButton:focus,.emby-button:focus,button:focus{background:var(--v)!important;color:#fff!important;outline:3px solid rgba(255,255,255,.92)!important;outline-offset:3px!important}
+            .detailPagePrimaryContainer{background:linear-gradient(90deg,rgba(8,8,13,.98) 0%,rgba(8,8,13,.78) 48%,transparent 78%)!important}
+            .detailLogo{max-width:36vw!important}.itemProgressBarForeground{background:var(--v)!important}
+            ::-webkit-scrollbar{width:0!important;height:0!important}
+            .dialog,.formDialogHeader,.formDialogFooter{background:#12121a!important;color:#fff!important}
+            input,.emby-input,.emby-select{background:#20202b!important;color:#fff!important;border-color:#343445!important}
+            *:focus{scroll-margin:110px!important}
+        """.trimIndent()
+        val quotedCss = org.json.JSONObject.quote(css)
+        val script = """
+            (function(){
+              var s=document.getElementById('velaris-tv-theme');
+              if(!s){s=document.createElement('style');s.id='velaris-tv-theme';document.head.appendChild(s);}
+              s.textContent=$quotedCss;
+              document.title='Velaris';
+              document.documentElement.setAttribute('data-velaris-tv','true');
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
     }
 
     private fun showConnectionError(serverUrl: String, details: String) {
