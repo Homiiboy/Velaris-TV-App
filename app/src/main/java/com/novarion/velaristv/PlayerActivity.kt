@@ -40,9 +40,10 @@ class PlayerActivity : Activity() {
     private var userId = ""
     private var mediaSourceId = ""
     private var availableTracks: Tracks? = null
-    private var introStartMs = -1L
-    private var introEndMs = -1L
+    private data class MediaSegment(val type:String,val startMs:Long,val endMs:Long)
+    private val mediaSegments=mutableListOf<MediaSegment>()
     private var skipIntroButton: Button? = null
+    private var activeSegment: MediaSegment? = null
     private val introUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val introUiTick = object : Runnable {
         override fun run() {
@@ -87,8 +88,9 @@ class PlayerActivity : Activity() {
             backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205))
             visibility = View.GONE
             setOnClickListener {
-                if(introEndMs > 0) {
-                    player?.seekTo(introEndMs)
+                val segment=activeSegment
+                if(segment != null && segment.endMs > 0) {
+                    player?.seekTo(segment.endMs)
                     visibility = View.GONE
                     playerView.requestFocus()
                 }
@@ -148,9 +150,9 @@ class PlayerActivity : Activity() {
     }
 
     private fun preparePlayback(exo: ExoPlayer, id:String, resumeTicks:Long) {
-        introStartMs=-1L; introEndMs=-1L
+        synchronized(mediaSegments) { mediaSegments.clear() }; activeSegment=null
         skipIntroButton?.visibility=View.GONE
-        loadIntroSegment(id)
+        loadMediaSegments(id)
         io.execute {
             val url = try { resolvePlaybackUrl(id) } catch (_:Exception) { "$server/Videos/$id/stream?static=true&api_key=$token" }
             runOnUiThread {
@@ -163,11 +165,11 @@ class PlayerActivity : Activity() {
         }
     }
 
-    private fun loadIntroSegment(id:String) {
+    private fun loadMediaSegments(id:String) {
         io.execute {
             try {
-                val encoded=URLEncoder.encode("Intro","UTF-8")
-                val c=URL("$server/MediaSegments/$id?includeSegmentTypes=$encoded").openConnection() as HttpURLConnection
+                val types=URLEncoder.encode("Intro,Recap,Outro,Credits,Preview","UTF-8")
+                val c=URL("$server/MediaSegments/$id?includeSegmentTypes=$types").openConnection() as HttpURLConnection
                 try {
                     c.connectTimeout=6000; c.readTimeout=8000
                     c.setRequestProperty("Accept","application/json")
@@ -175,14 +177,15 @@ class PlayerActivity : Activity() {
                     if(c.responseCode in 200..299) {
                         val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
                         val arr=json.optJSONArray("Items")
+                        val loaded=mutableListOf<MediaSegment>()
                         if(arr!=null) for(i in 0 until arr.length()) {
                             val s=arr.getJSONObject(i)
-                            if(s.optString("Type").equals("Intro",true)) {
-                                introStartMs=s.optLong("StartTicks",0L)/10_000L
-                                introEndMs=s.optLong("EndTicks",0L)/10_000L
-                                break
-                            }
+                            val type=s.optString("Type")
+                            val start=s.optLong("StartTicks",0L)/10_000L
+                            val end=s.optLong("EndTicks",0L)/10_000L
+                            if(type.isNotBlank() && end>start) loaded.add(MediaSegment(type,start,end))
                         }
+                        synchronized(mediaSegments) { mediaSegments.clear(); mediaSegments.addAll(loaded) }
                     }
                 } finally { c.disconnect() }
             } catch(_:Exception) {}
@@ -191,12 +194,20 @@ class PlayerActivity : Activity() {
 
     private fun updateIntroButton() {
         val p=player ?: return
-        val show=introStartMs>=0 && introEndMs>introStartMs && p.currentPosition in introStartMs until introEndMs
+        val current=p.currentPosition
+        val segment=synchronized(mediaSegments) { mediaSegments.firstOrNull { current in it.startMs until it.endMs } }
+        activeSegment=segment
         val button=skipIntroButton ?: return
-        if(show && button.visibility!=View.VISIBLE) {
-            button.visibility=View.VISIBLE
-            button.requestFocus()
-        } else if(!show && button.visibility==View.VISIBLE) {
+        if(segment!=null) {
+            button.text=when(segment.type.lowercase()) {
+                "recap" -> "Rückblick überspringen"
+                "outro","credits" -> if(nextItemId.isNotBlank()) "Nächste Folge" else "Abspann überspringen"
+                "preview" -> "Vorschau überspringen"
+                else -> "Intro überspringen"
+            }
+            button.contentDescription=button.text
+            if(button.visibility!=View.VISIBLE) { button.visibility=View.VISIBLE; button.requestFocus() }
+        } else if(button.visibility==View.VISIBLE) {
             button.visibility=View.GONE
         }
     }
