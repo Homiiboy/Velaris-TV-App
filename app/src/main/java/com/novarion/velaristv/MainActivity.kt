@@ -26,6 +26,8 @@ class MainActivity : Activity() {
     private var userId = ""
     private var homeRoot: LinearLayout? = null
     @Volatile private var destroyed = false
+    private val backStack = java.util.ArrayDeque<()->Unit>()
+    private var suppressHistory = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,7 +46,16 @@ class MainActivity : Activity() {
     override fun onDestroy() { destroyed = true; io.shutdownNow(); super.onDestroy() }
 
     override fun onBackPressed() {
-        showSettingsDialog()
+        if(backStack.isNotEmpty()) {
+            val action=backStack.removeLast()
+            suppressHistory=true
+            action()
+            suppressHistory=false
+        } else showSettingsDialog()
+    }
+
+    private fun rememberBack(action:()->Unit) {
+        if(!suppressHistory) backStack.addLast(action)
     }
 
     private fun showServer() {
@@ -91,6 +102,7 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
+        if(!suppressHistory) backStack.clear()
         val root = LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(8,8,13))
             setPadding(dp(48),dp(24),dp(48),dp(24))
@@ -185,6 +197,7 @@ class MainActivity : Activity() {
 
 
     private fun showLibrary(title:String, type:String) {
+        rememberBack { showHome() }
         val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
         root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE) })
         root.addView(ProgressBar(this))
@@ -202,6 +215,7 @@ class MainActivity : Activity() {
     }
 
     private fun showFavorites() {
+        rememberBack { showHome() }
         val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
         root.addView(TextView(this).apply { text="Meine Liste"; textSize=32f; setTextColor(Color.WHITE) })
         root.addView(ProgressBar(this))
@@ -220,6 +234,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSearch() {
+        rememberBack { showHome() }
         val input=EditText(this).apply { hint="Filme und Serien suchen"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine() }
         val root=setupPage("Suche","Durchsuche deine Jellyfin-Mediathek",input)
         root.addView(button("Suchen") {
@@ -231,6 +246,7 @@ class MainActivity : Activity() {
     }
 
     private fun search(query:String) {
+        rememberBack { showSearch() }
         val encoded=java.net.URLEncoder.encode(query,"UTF-8")
         io.execute {
             try {
@@ -248,6 +264,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSeries(seriesId:String) {
+        rememberBack { showHome() }
         io.execute {
             try {
                 val series=request("/Users/$userId/Items/$seriesId")
@@ -269,9 +286,10 @@ class MainActivity : Activity() {
     }
 
     private fun showSeason(seriesId:String, seasonId:String) {
+        rememberBack { showSeries(seriesId) }
         io.execute {
             try {
-                val episodes=items("/Shows/$seriesId/Episodes?UserId=$userId&SeasonId=$seasonId&Fields=Overview,PrimaryImageAspectRatio")
+                val episodes=items("/Shows/$seriesId/Episodes?UserId=$userId&SeasonId=$seasonId&Fields=Overview,PrimaryImageAspectRatio,RunTimeTicks")
                 runOnUiThread {
                     val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
                     root.addView(TextView(this).apply { text="Episoden"; textSize=32f; setTextColor(Color.WHITE) })
@@ -281,7 +299,14 @@ class MainActivity : Activity() {
                         val number=ep.optInt("IndexNumber",0)
                         val name=ep.optString("Name")
                         val nextId=episodes.getOrNull(episodes.indexOf(ep)+1)?.optString("Id").orEmpty()
-                        root.addView(button((if(number>0) "$number. " else "")+name) { startEpisode(eid,ticks,nextId) },params(-1,62,8))
+                        val card=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; isFocusable=true; isClickable=true; setPadding(dp(8),dp(8),dp(8),dp(8)); setOnClickListener { startEpisode(eid,ticks,nextId) }; setOnFocusChangeListener { v,f -> v.animate().scaleX(if(f)1.025f else 1f).scaleY(if(f)1.025f else 1f).setDuration(120).start() } }
+                        val thumb=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+                        card.addView(thumb,LinearLayout.LayoutParams(dp(250),dp(140))); loadImage(thumb,eid,"Primary",500)
+                        val info=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(18),0,0,0) }
+                        info.addView(TextView(this).apply { text=(if(number>0) "$number. " else "")+name; textSize=20f; setTextColor(Color.WHITE) })
+                        info.addView(TextView(this).apply { text=ep.optString("Overview"); textSize=14f; setTextColor(Color.LTGRAY); maxLines=3 },params(-1,-2,6))
+                        card.addView(info,LinearLayout.LayoutParams(0,dp(140),1f))
+                        root.addView(card,params(-1,156,8))
                     }
                     root.addView(button("Zurück zur Serie") { showSeries(seriesId) },params(260,56,18))
                     setContentView(ScrollView(this).apply { addView(root) })
@@ -293,6 +318,7 @@ class MainActivity : Activity() {
     private fun startEpisode(id:String,ticks:Long,nextId:String="")=playNative(id,ticks,nextId)
 
     private fun showDetails(id:String) {
+        rememberBack { showHome() }
         io.execute {
             try {
                 val x=request("/Users/$userId/Items/$id")
