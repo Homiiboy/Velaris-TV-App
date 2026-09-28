@@ -1,18 +1,10 @@
 package com.novarion.velaristv
 
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
-import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
@@ -20,531 +12,231 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
-import android.webkit.CookieManager
-import android.webkit.SslErrorHandler
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.EditText
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.Space
-import android.widget.TextView
+import android.widget.*
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
-    private val preferences by lazy {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-    }
-
-    private val backHandler = Handler(Looper.getMainLooper())
-    private var backLongPressTriggered = false
-    private var webView: WebView? = null
-    private var webContainer: FrameLayout? = null
-    private var customView: View? = null
-    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-
-    private val openSettingsRunnable = Runnable {
-        backLongPressTriggered = true
-        val currentUrl = preferences.getString(KEY_SERVER_URL, "").orEmpty()
-        showServerSetup(currentUrl)
-    }
+    private val prefs by lazy { getSharedPreferences("velaris_tv", MODE_PRIVATE) }
+    private val io = Executors.newSingleThreadExecutor()
+    private var server = ""
+    private var token = ""
+    private var userId = ""
+    private var homeRoot: LinearLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        applyImmersiveMode()
-
-        val serverUrl = preferences.getString(KEY_SERVER_URL, "").orEmpty()
-        if (serverUrl.isBlank()) {
-            showServerSetup("")
-        } else {
-            openVelaris(serverUrl)
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        applyImmersiveMode()
-        webView?.onResume()
-    }
-
-    override fun onPause() {
-        webView?.onPause()
-        super.onPause()
-    }
-
-    override fun onDestroy() {
-        backHandler.removeCallbacks(openSettingsRunnable)
-        disposeWebView()
-        super.onDestroy()
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode != KeyEvent.KEYCODE_BACK) {
-            return super.dispatchKeyEvent(event)
-        }
-
-        when (event.action) {
-            KeyEvent.ACTION_DOWN -> {
-                if (event.repeatCount == 0) {
-                    backLongPressTriggered = false
-                    backHandler.postDelayed(openSettingsRunnable, LONG_BACK_PRESS_MS)
-                }
-                return true
-            }
-
-            KeyEvent.ACTION_UP -> {
-                backHandler.removeCallbacks(openSettingsRunnable)
-                if (!backLongPressTriggered) {
-                    handleShortBackPress()
-                }
-                return true
-            }
-        }
-
-        return true
-    }
-
-    private fun handleShortBackPress() {
+        immersive()
+        server = prefs.getString("server_url", "").orEmpty()
+        token = prefs.getString("access_token", "").orEmpty()
+        userId = prefs.getString("user_id", "").orEmpty()
         when {
-            customView != null -> hideCustomView()
-            webView?.canGoBack() == true -> webView?.goBack()
-            else -> moveTaskToBack(true)
+            server.isBlank() -> showServer()
+            token.isBlank() || userId.isBlank() -> showLogin()
+            else -> showHome()
         }
     }
 
-    private fun showServerSetup(prefill: String) {
-        disposeWebView()
-        applyImmersiveMode()
+    override fun onDestroy() { io.shutdownNow(); super.onDestroy() }
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(72), dp(36), dp(72), dp(36))
-            setBackgroundColor(Color.BLACK)
-        }
+    override fun onBackPressed() {
+        showSettingsDialog()
+    }
 
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.velaris_logo)
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        root.addView(logo, LinearLayout.LayoutParams(dp(190), dp(190)))
-
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(18)))
-
-        val title = TextView(this).apply {
-            text = getString(R.string.server_title)
-            setTextColor(Color.WHITE)
-            textSize = 28f
-            gravity = Gravity.CENTER
-        }
-        root.addView(title)
-
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(10)))
-
-        val description = TextView(this).apply {
-            text = getString(R.string.server_description)
-            setTextColor(Color.rgb(190, 190, 205))
-            textSize = 16f
-            gravity = Gravity.CENTER
-        }
-        root.addView(description)
-
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(22)))
-
+    private fun showServer() {
         val input = EditText(this).apply {
-            setText(prefill)
-            hint = getString(R.string.server_hint)
-            setHintTextColor(Color.rgb(110, 110, 130))
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setSingleLine(true)
+            hint = "http://192.168.1.50:8096"; setText(server); setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY); textSize = 18f; setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            backgroundTintList = ColorStateList.valueOf(Color.rgb(105, 78, 255))
-            setPadding(dp(14), dp(10), dp(14), dp(10))
         }
-        root.addView(input, LinearLayout.LayoutParams(dp(620), dp(62)))
-
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(18)))
-
-        val errorText = TextView(this).apply {
-            setTextColor(Color.rgb(255, 110, 150))
-            textSize = 14f
-            gravity = Gravity.CENTER
-            visibility = View.GONE
-        }
-        root.addView(errorText)
-
-        val connectButton = createTvButton(getString(R.string.connect)).apply {
-            setOnClickListener {
-                val normalized = normalizeUrl(input.text.toString())
-                if (normalized == null) {
-                    errorText.text = "Bitte eine gültige Velaris-Adresse eingeben."
-                    errorText.visibility = View.VISIBLE
-                    input.requestFocus()
-                    return@setOnClickListener
-                }
-
-                preferences.edit().putString(KEY_SERVER_URL, normalized).apply()
-                openVelaris(normalized)
+        val root = setupPage("Velaris verbinden", "Adresse deines Jellyfin-Servers", input)
+        root.addView(button("Verbinden") {
+            val value = normalize(input.text.toString())
+            if (value == null) toast("Ungültige Server-Adresse") else {
+                server = value; prefs.edit().putString("server_url", server).apply(); showLogin()
             }
-        }
-        root.addView(connectButton, LinearLayout.LayoutParams(dp(230), dp(64)).apply {
-            topMargin = dp(16)
-        })
-
-        val hint = TextView(this).apply {
-            text = "Tipp: Zur Serverauswahl später Zurück ca. 1,2 Sekunden gedrückt halten."
-            setTextColor(Color.rgb(125, 125, 145))
-            textSize = 13f
-            gravity = Gravity.CENTER
-        }
-        root.addView(hint, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(20)
-        })
-
+        }, params(260, 64, 18))
         setContentView(root)
-        if (prefill.isBlank()) input.requestFocus() else connectButton.requestFocus()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun openVelaris(serverUrl: String) {
-        disposeWebView()
-        applyImmersiveMode()
-
-        val container = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
+    private fun showLogin() {
+        val user = EditText(this).apply { hint="Benutzername"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine() }
+        val pass = EditText(this).apply {
+            hint="Passwort"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine()
+            inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
-        webContainer = container
+        val root = setupPage("Willkommen bei Velaris", "Mit deinem Jellyfin-Konto anmelden", user)
+        root.addView(pass, params(600, 62, 12))
+        root.addView(button("Anmelden") { login(user.text.toString(), pass.text.toString()) }, params(260,64,18))
+        root.addView(button("Server ändern") { clearConnection(); showServer() }, params(260,58,10))
+        setContentView(root); user.requestFocus()
+    }
 
-        val browser = WebView(this).apply {
-            setBackgroundColor(Color.BLACK)
-            isFocusable = true
-            isFocusableInTouchMode = true
+    private fun login(username: String, password: String) {
+        if (username.isBlank()) return toast("Benutzername eingeben")
+        io.execute {
+            try {
+                val body = JSONObject().put("Username", username).put("Pw", password).toString()
+                val json = request("/Users/AuthenticateByName", "POST", body, false)
+                token = json.getString("AccessToken")
+                userId = json.getJSONObject("User").getString("Id")
+                prefs.edit().putString("access_token", token).putString("user_id", userId).apply()
+                runOnUiThread { showHome() }
+            } catch (e: Exception) { runOnUiThread { toast("Anmeldung fehlgeschlagen: ${e.message ?: "Server nicht erreichbar"}") } }
+        }
+    }
 
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                mediaPlaybackRequiresUserGesture = false
-                allowFileAccess = false
-                allowContentAccess = false
-                builtInZoomControls = false
-                displayZoomControls = false
-                setSupportZoom(false)
-                loadWithOverviewMode = false
-                useWideViewPort = true
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                userAgentString = "$userAgentString VelarisTV/0.1.0"
-            }
+    private fun showHome() {
+        val root = LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(8,8,13))
+            setPadding(dp(48),dp(24),dp(48),dp(24))
+        }
+        homeRoot=root
+        val top = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+        top.addView(ImageView(this).apply { setImageResource(R.drawable.velaris_logo); scaleType=ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(dp(120),dp(62)))
+        top.addView(TextView(this).apply { text="  Startseite     Filme     Serien"; setTextColor(Color.WHITE); textSize=18f }, LinearLayout.LayoutParams(0,dp(62),1f))
+        top.addView(button("⚙") { showSettingsDialog() }, LinearLayout.LayoutParams(dp(72),dp(54)))
+        root.addView(top)
+        root.addView(TextView(this).apply { text="Dein Velaris"; setTextColor(Color.WHITE); textSize=32f; setPadding(0,dp(16),0,dp(8)) })
+        root.addView(ProgressBar(this))
+        setContentView(ScrollView(this).apply { addView(root) })
+        loadHome()
+    }
 
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val uri = request.url
-                    return if (uri.scheme == "http" || uri.scheme == "https") {
-                        false
-                    } else {
-                        openExternalUri(uri)
-                        true
-                    }
+    private fun loadHome() {
+        io.execute {
+            try {
+                val resume = items("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview&MediaTypes=Video")
+                val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
+                val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    homeRoot?.removeViews(2, homeRoot!!.childCount-2)
+                    addHero((resume + latest).firstOrNull())
+                    addRow("Weiterschauen", resume)
+                    addRow("Neu bei Velaris", latest)
+                    addRow("Filme", movies)
                 }
+            } catch(e: Exception) { runOnUiThread { toast("Bibliothek konnte nicht geladen werden: ${e.message}") } }
+        }
+    }
 
-                override fun onPageFinished(view: WebView, url: String) {
-                    super.onPageFinished(view, url)
-                    view.requestFocus(View.FOCUS_DOWN)
-                    applyVelarisTvTheme(view)
-                    applyImmersiveMode()
+    private fun items(path: String): List<JSONObject> {
+        val json=request(path)
+        val arr=if(json.has("Items")) json.getJSONArray("Items") else json.optJSONArray("array")
+        val out=mutableListOf<JSONObject>()
+        if(arr!=null) for(i in 0 until arr.length()) out.add(arr.getJSONObject(i))
+        return out
+    }
+
+    private fun addHero(item: JSONObject?) {
+        if(item==null) return
+        val id=item.optString("Id"); val title=item.optString("Name","Velaris")
+        val hero=FrameLayout(this).apply {
+            minimumHeight=dp(330); isFocusable=true
+            background=android.graphics.drawable.GradientDrawable().apply { setColor(Color.rgb(18,18,28)); cornerRadius=dp(12).toFloat() }
+            setOnClickListener { showDetails(id) }
+        }
+        val image=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+        hero.addView(image, FrameLayout.LayoutParams(-1,dp(330)))
+        loadImage(image, id, "Backdrop", 1280)
+        val shade=View(this).apply { background=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.rgb(8,8,13),0x2208080D)) }
+        hero.addView(shade, FrameLayout.LayoutParams(-1,-1))
+        val text=TextView(this).apply { this.text=title; textSize=36f; setTextColor(Color.WHITE); gravity=Gravity.BOTTOM; setPadding(dp(32),0,0,dp(34)) }
+        hero.addView(text, FrameLayout.LayoutParams(-1,-1))
+        homeRoot?.addView(hero, LinearLayout.LayoutParams(-1,dp(330)).apply { bottomMargin=dp(26) })
+    }
+
+    private fun addRow(title: String, data: List<JSONObject>) {
+        if(data.isEmpty()) return
+        homeRoot?.addView(TextView(this).apply { text=title; setTextColor(Color.WHITE); textSize=23f; setPadding(0,dp(12),0,dp(10)) })
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(4),dp(8),dp(4),dp(18)) }
+        data.forEach { item ->
+            val id=item.optString("Id")
+            val card=LinearLayout(this).apply {
+                orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
+                setPadding(dp(5),dp(5),dp(5),dp(5)); setOnClickListener { showDetails(id) }
+                setOnFocusChangeListener { v, focused -> v.animate().scaleX(if(focused)1.08f else 1f).scaleY(if(focused)1.08f else 1f).setDuration(120).start() }
+            }
+            val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+            card.addView(img, LinearLayout.LayoutParams(dp(180),dp(260)))
+            loadImage(img,id,"Primary",360)
+            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1 }, LinearLayout.LayoutParams(dp(180),dp(38)))
+            row.addView(card, LinearLayout.LayoutParams(dp(194),dp(315)).apply { marginEnd=dp(12) })
+        }
+        homeRoot?.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(row) }, LinearLayout.LayoutParams(-1,dp(325)))
+    }
+
+    private fun showDetails(id:String) {
+        io.execute {
+            try {
+                val x=request("/Users/$userId/Items/$id")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(80),dp(50),dp(80),dp(50)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
+                    root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
+                    root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
+                    root.addView(button("▶ Abspielen") { playInJellyfin(id) },params(260,64,22))
+                    root.addView(button("Zurück") { showHome() },params(220,58,10))
+                    setContentView(root)
                 }
-
-                override fun onReceivedError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    error: WebResourceError
-                ) {
-                    if (request.isForMainFrame) {
-                        showConnectionError(serverUrl, error.description?.toString().orEmpty())
-                    }
-                }
-
-                override fun onReceivedHttpError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    errorResponse: WebResourceResponse
-                ) {
-                    if (request.isForMainFrame && errorResponse.statusCode >= 400) {
-                        showConnectionError(serverUrl, "HTTP ${errorResponse.statusCode}")
-                    }
-                }
-
-                override fun onReceivedSslError(
-                    view: WebView,
-                    handler: SslErrorHandler,
-                    error: SslError
-                ) {
-                    handler.cancel()
-                    showConnectionError(serverUrl, "Das SSL-Zertifikat konnte nicht überprüft werden.")
-                }
-            }
-
-            webChromeClient = object : WebChromeClient() {
-                override fun onShowCustomView(view: View, callback: CustomViewCallback) {
-                    if (customView != null) {
-                        callback.onCustomViewHidden()
-                        return
-                    }
-
-                    customView = view
-                    customViewCallback = callback
-                    this@MainActivity.webView?.visibility = View.GONE
-                    webContainer?.addView(
-                        view,
-                        FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    )
-                    applyImmersiveMode()
-                }
-
-                override fun onHideCustomView() {
-                    hideCustomView()
-                }
-            }
-        }
-
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(browser, true)
-        }
-
-        val isDebuggable =
-            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (isDebuggable) {
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
-
-        webView = browser
-        container.addView(
-            browser,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-        setContentView(container)
-        browser.requestFocus(View.FOCUS_DOWN)
-        browser.loadUrl(serverUrl)
-    }
-
-    private fun applyVelarisTvTheme(view: WebView) {
-        val css = """
-            :root{--v:#7c5cff;--bg:#08080d;--panel:#111119;--muted:#b7b7c5}
-            html,body,.backgroundContainer,.skinBody{background:var(--bg)!important;color:#fff!important}
-            .skinHeader,.headerTop,.headerTabs{background:linear-gradient(180deg,rgba(8,8,13,.98),rgba(8,8,13,.72),transparent)!important;box-shadow:none!important}
-            .headerTabs .emby-tab-button,.headerButton,.paper-icon-button-light{color:#fff!important;opacity:.86}
-            .headerTabs .emby-tab-button-active{color:#fff!important;opacity:1}
-            .headerTabs .emby-tab-button-active::after{background:var(--v)!important;height:3px!important;border-radius:99px!important}
-            .pageTitle,.sectionTitle,h1,h2,h3{color:#fff!important;font-weight:700!important;letter-spacing:-.02em!important}
-            .sectionTitle{font-size:1.55rem!important}.itemsContainer{gap:.75rem!important}
-            .card{border-radius:7px!important;overflow:visible!important;transition:transform 150ms ease,filter 150ms ease!important}
-            .cardBox,.cardScalable,.cardImageContainer{border-radius:7px!important;overflow:hidden!important;background:var(--panel)!important}
-            .card:focus-within,.card.focused,.card:hover{transform:scale(1.09)!important;z-index:20!important;filter:drop-shadow(0 14px 22px rgba(0,0,0,.65))!important}
-            .card:focus-within .cardBox,.card.focused .cardBox{outline:3px solid var(--v)!important;outline-offset:3px!important}
-            .cardText{color:#fff!important}.cardText-secondary{color:var(--muted)!important}
-            .emby-button.button-submit,.raised.button-submit,.detailButton:focus,.emby-button:focus,button:focus{background:var(--v)!important;color:#fff!important;outline:3px solid rgba(255,255,255,.92)!important;outline-offset:3px!important}
-            .detailPagePrimaryContainer{background:linear-gradient(90deg,rgba(8,8,13,.98) 0%,rgba(8,8,13,.78) 48%,transparent 78%)!important}
-            .detailLogo{max-width:36vw!important}.itemProgressBarForeground{background:var(--v)!important}
-            ::-webkit-scrollbar{width:0!important;height:0!important}
-            .dialog,.formDialogHeader,.formDialogFooter{background:#12121a!important;color:#fff!important}
-            input,.emby-input,.emby-select{background:#20202b!important;color:#fff!important;border-color:#343445!important}
-            *:focus{scroll-margin:110px!important}
-        """.trimIndent()
-        val quotedCss = org.json.JSONObject.quote(css)
-        val script = """
-            (function(){
-              var s=document.getElementById('velaris-tv-theme');
-              if(!s){s=document.createElement('style');s.id='velaris-tv-theme';document.head.appendChild(s);}
-              s.textContent=$quotedCss;
-              document.title='Velaris';
-              document.documentElement.setAttribute('data-velaris-tv','true');
-            })();
-        """.trimIndent()
-        view.evaluateJavascript(script, null)
-    }
-
-    private fun showConnectionError(serverUrl: String, details: String) {
-        runOnUiThread {
-            disposeWebView()
-
-            val root = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(80), dp(48), dp(80), dp(48))
-                setBackgroundColor(Color.BLACK)
-            }
-
-            val logo = ImageView(this).apply {
-                setImageResource(R.drawable.velaris_logo)
-                adjustViewBounds = true
-            }
-            root.addView(logo, LinearLayout.LayoutParams(dp(150), dp(150)))
-
-            val title = TextView(this).apply {
-                text = "Velaris ist nicht erreichbar"
-                setTextColor(Color.WHITE)
-                textSize = 28f
-                gravity = Gravity.CENTER
-            }
-            root.addView(title)
-
-            val message = TextView(this).apply {
-                text = buildString {
-                    append(serverUrl)
-                    if (details.isNotBlank()) {
-                        append("\n\n")
-                        append(details)
-                    }
-                }
-                setTextColor(Color.rgb(185, 185, 205))
-                textSize = 15f
-                gravity = Gravity.CENTER
-            }
-            root.addView(message, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(14)
-            })
-
-            val buttonRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
-
-            val retryButton = createTvButton(getString(R.string.retry)).apply {
-                setOnClickListener { openVelaris(serverUrl) }
-            }
-            buttonRow.addView(retryButton, LinearLayout.LayoutParams(dp(240), dp(64)).apply {
-                marginEnd = dp(12)
-            })
-
-            val changeButton = createTvButton(getString(R.string.change_server)).apply {
-                setOnClickListener { showServerSetup(serverUrl) }
-            }
-            buttonRow.addView(changeButton, LinearLayout.LayoutParams(dp(240), dp(64)).apply {
-                marginStart = dp(12)
-            })
-
-            root.addView(buttonRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(26)
-            })
-
-            setContentView(root)
-            retryButton.requestFocus()
+            } catch(e:Exception){ runOnUiThread{toast("Details konnten nicht geladen werden")} }
         }
     }
 
-    private fun createTvButton(label: String): Button = Button(this).apply {
-        text = label
-        isAllCaps = false
-        textSize = 17f
-        setTextColor(Color.WHITE)
-        isFocusable = true
-        isFocusableInTouchMode = true
-        backgroundTintList = ColorStateList(
-            arrayOf(
-                intArrayOf(android.R.attr.state_focused),
-                intArrayOf(android.R.attr.state_pressed),
-                intArrayOf()
-            ),
-            intArrayOf(
-                Color.rgb(35, 180, 255),
-                Color.rgb(124, 92, 255),
-                Color.rgb(83, 50, 205)
-            )
-        )
+    private fun playInJellyfin(id:String) {
+        // Phase 2 foundation: native catalogue; playback handoff remains compatible with Jellyfin.
+        val url="$server/web/index.html#!/details?id=$id"
+        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
-    private fun normalizeUrl(raw: String): String? {
-        var value = raw.trim()
-        if (value.isBlank()) return null
-        if (!value.startsWith("http://", true) && !value.startsWith("https://", true)) {
-            value = "http://$value"
-        }
-
-        val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return null
-        if ((uri.scheme != "http" && uri.scheme != "https") || uri.host.isNullOrBlank()) {
-            return null
-        }
-
-        return value.trimEnd('/')
-    }
-
-    private fun openExternalUri(uri: Uri) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-        } catch (_: ActivityNotFoundException) {
-            // Ignore unsupported external schemes and keep Velaris running.
+    private fun loadImage(view:ImageView,id:String,type:String,width:Int) {
+        io.execute {
+            try {
+                val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=90").openConnection() as HttpURLConnection
+                conn.setRequestProperty("X-Emby-Token",token); conn.connectTimeout=6000
+                val bmp=android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                runOnUiThread { view.setImageBitmap(bmp) }
+            } catch(_:Exception){}
         }
     }
 
-    private fun hideCustomView() {
-        val currentCustomView = customView ?: return
-        webContainer?.removeView(currentCustomView)
-        customView = null
-        customViewCallback?.onCustomViewHidden()
-        customViewCallback = null
-        webView?.visibility = View.VISIBLE
-        webView?.requestFocus(View.FOCUS_DOWN)
-        applyImmersiveMode()
+    private fun request(path:String, method:String="GET", body:String?=null, auth:Boolean=true):JSONObject {
+        val conn=URL(server+path).openConnection() as HttpURLConnection
+        conn.requestMethod=method; conn.connectTimeout=8000; conn.readTimeout=12000
+        conn.setRequestProperty("Accept","application/json")
+        conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
+        if(body!=null){ conn.doOutput=true; conn.setRequestProperty("Content-Type","application/json"); conn.outputStream.use{it.write(body.toByteArray())} }
+        val code=conn.responseCode
+        val text=(if(code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
+        if(code !in 200..299) throw IllegalStateException("HTTP $code")
+        return if(text.trim().startsWith("[")) JSONObject().put("array",org.json.JSONArray(text)) else if(text.isBlank()) JSONObject() else JSONObject(text)
     }
 
-    private fun disposeWebView() {
-        if (customView != null) {
-            hideCustomView()
-        }
-
-        webView?.apply {
-            stopLoading()
-            loadUrl("about:blank")
-            clearHistory()
-            (parent as? ViewGroup)?.removeView(this)
-            removeAllViews()
-            destroy()
-        }
-        webView = null
-        webContainer = null
+    private fun showSettingsDialog() {
+        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Abmelden","Server ändern")) { d,w ->
+            when(w){0->showHome();1->{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()};2->{clearConnection();showServer()}}
+        }.setNegativeButton("Abbrechen",null).show()
     }
 
-    private fun applyImmersiveMode() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.apply {
-                hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                )
-        }
+    private fun clearConnection(){ server="";token="";userId="";prefs.edit().clear().apply() }
+    private fun setupPage(title:String,sub:String,first:View)=LinearLayout(this).apply {
+        orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(72),dp(36),dp(72),dp(36)); setBackgroundColor(Color.BLACK)
+        addView(ImageView(this@MainActivity).apply{setImageResource(R.drawable.velaris_logo);scaleType=ImageView.ScaleType.FIT_CENTER},params(180,180,0))
+        addView(TextView(this@MainActivity).apply{text=title;textSize=30f;setTextColor(Color.WHITE);gravity=Gravity.CENTER},params(-2,-2,12))
+        addView(TextView(this@MainActivity).apply{text=sub;textSize=16f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER},params(-2,-2,8))
+        addView(first,params(600,62,22))
     }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
-
-    companion object {
-        private const val PREFS_NAME = "velaris_tv"
-        private const val KEY_SERVER_URL = "server_url"
-        private const val LONG_BACK_PRESS_MS = 1_200L
+    private fun button(label:String, click:()->Unit)=Button(this).apply {
+        text=label; isAllCaps=false; textSize=17f; setTextColor(Color.WHITE); isFocusable=true
+        backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205)); setOnClickListener{click()}
     }
+    private fun params(w:Int,h:Int,top:Int)=LinearLayout.LayoutParams(if(w<0)w else dp(w),if(h<0)h else dp(h)).apply{topMargin=dp(top)}
+    private fun normalize(raw:String):String? { var v=raw.trim();if(v.isBlank())return null;if(!v.startsWith("http"))v="http://$v";val u=runCatching{Uri.parse(v)}.getOrNull()?:return null;return if(u.host.isNullOrBlank())null else v.trimEnd('/') }
+    private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
+    private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
+    private fun immersive(){ if(Build.VERSION.SDK_INT>=30) window.insetsController?.apply{hide(WindowInsets.Type.systemBars());systemBarsBehavior=WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE} else @Suppress("DEPRECATION") run{window.decorView.systemUiVisibility=5894} }
 }
