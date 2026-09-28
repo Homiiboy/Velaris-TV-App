@@ -16,6 +16,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import org.json.JSONObject
+import java.net.URLEncoder
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -31,6 +32,7 @@ class PlayerActivity : Activity() {
     private var sessionStarted = false
     private var stoppedReported = false
     private var nextItemId = ""
+    private var mediaSourceId = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,8 +75,7 @@ class PlayerActivity : Activity() {
                     reportStoppedOnce()
                     if(nextItemId.isNotBlank()) {
                         itemId=nextItemId; nextItemId=""; stoppedReported=false; sessionStarted=false
-                        exo.setMediaItem(MediaItem.fromUri("$server/Videos/$itemId/stream?static=true&api_key=$token"))
-                        exo.prepare(); exo.playWhenReady=true
+                        preparePlayback(exo,itemId,0L)
                     }
                 }
             }
@@ -83,12 +84,43 @@ class PlayerActivity : Activity() {
             }
         })
 
-        val streamUrl = "$server/Videos/$itemId/stream?static=true&api_key=$token"
-        exo.setMediaItem(MediaItem.fromUri(streamUrl))
-        exo.prepare()
-        if (startTicks > 0) exo.seekTo(startTicks / 10_000L)
-        exo.playWhenReady = true
+        preparePlayback(exo, itemId, startTicks)
         playerView.requestFocus()
+    }
+
+    private fun preparePlayback(exo: ExoPlayer, id:String, resumeTicks:Long) {
+        io.execute {
+            val url = try { resolvePlaybackUrl(id) } catch (_:Exception) { "$server/Videos/$id/stream?static=true&api_key=$token" }
+            runOnUiThread {
+                if(isFinishing || isDestroyed || player == null) return@runOnUiThread
+                exo.setMediaItem(MediaItem.fromUri(url))
+                exo.prepare()
+                if(resumeTicks > 0) exo.seekTo(resumeTicks / 10_000L)
+                exo.playWhenReady=true
+            }
+        }
+    }
+
+    private fun resolvePlaybackUrl(id:String):String {
+        val body=JSONObject().put("UserId",intent.getStringExtra("userId").orEmpty()).put("StartTimeTicks",0).put("AutoOpenLiveStream",true).toString()
+        val c=URL("$server/Items/$id/PlaybackInfo").openConnection() as HttpURLConnection
+        try {
+            c.requestMethod="POST"; c.doOutput=true; c.connectTimeout=8000; c.readTimeout=12000
+            c.setRequestProperty("Content-Type","application/json")
+            c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.3.0", Token="$token"""")
+            c.outputStream.use { it.write(body.toByteArray()) }
+            if(c.responseCode !in 200..299) throw IllegalStateException("PlaybackInfo HTTP ${c.responseCode}")
+            val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+            val sources=json.optJSONArray("MediaSources") ?: throw IllegalStateException("Keine Medienquelle")
+            if(sources.length()==0) throw IllegalStateException("Keine Medienquelle")
+            val source=sources.getJSONObject(0)
+            mediaSourceId=source.optString("Id")
+            val transcoding=source.optString("TranscodingUrl")
+            if(transcoding.isNotBlank()) return if(transcoding.startsWith("http")) transcoding else server+transcoding
+            val container=source.optString("Container","mp4").split(",").firstOrNull().orEmpty().ifBlank{"mp4"}
+            val encoded=URLEncoder.encode(mediaSourceId,"UTF-8")
+            return "$server/Videos/$id/stream.$container?Static=true&MediaSourceId=$encoded&api_key=$token"
+        } finally { c.disconnect() }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
