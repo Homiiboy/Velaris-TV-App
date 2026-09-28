@@ -508,5 +508,21 @@ class MainActivity : Activity() {
     private fun normalize(raw:String):String? { var v=raw.trim();if(v.isBlank())return null;if(!v.contains("://"))v="http://$v";val u=runCatching{Uri.parse(v)}.getOrNull()?:return null;return if(u.host.isNullOrBlank() || (u.scheme!="http" && u.scheme!="https"))null else v.trimEnd('/') }
     private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
-    private fun immersive() {\n        // Some Android/Google TV firmware exposes WindowInsetsController only after\n        // the decor view has been attached. Defer immersive mode until then so\n        // startup never depends on an unavailable DecorView.\n        window.decorView.post {\n            if (isFinishing || isDestroyed) return@post\n            if (Build.VERSION.SDK_INT >= 30) {\n                window.decorView.windowInsetsController?.apply {\n                    hide(WindowInsets.Type.systemBars())\n                    systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE\n                }\n            } else {\n                @Suppress("DEPRECATION")\n                window.decorView.systemUiVisibility = 5894\n            }\n        }\n    }
+    private fun immersive() {
+        // Some Android/Google TV firmware exposes WindowInsetsController only after
+        // the decor view has been attached. Defer immersive mode until then so
+        // startup never depends on an unavailable DecorView.
+        window.decorView.post {
+            if (isFinishing || isDestroyed) return@post
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.decorView.windowInsetsController?.apply {
+                    hide(WindowInsets.Type.systemBars())
+                    systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = 5894
+            }
+        }
+    }
 }
