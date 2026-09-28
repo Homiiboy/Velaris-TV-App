@@ -17,6 +17,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
+@UnstableApi
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("velaris_tv", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
@@ -222,7 +223,6 @@ class MainActivity : Activity() {
         }
     }
 
-    @UnstableApi
     private fun showSeries(seriesId:String) {
         io.execute {
             try {
@@ -242,7 +242,6 @@ class MainActivity : Activity() {
         }
     }
 
-    @UnstableApi
     private fun showSeason(seriesId:String, seasonId:String) {
         io.execute {
             try {
@@ -264,7 +263,6 @@ class MainActivity : Activity() {
         }
     }
 
-    @UnstableApi
     private fun startEpisode(id:String,ticks:Long)=playNative(id,ticks)
 
     private fun showDetails(id:String) {
@@ -277,9 +275,7 @@ class MainActivity : Activity() {
                     root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
                     val ticks=x.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
-                    @UnstableApi
-                    fun startPlayback() = playNative(id, ticks)
-                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { startPlayback() },params(260,64,22))
+                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
@@ -287,7 +283,6 @@ class MainActivity : Activity() {
         }
     }
 
-    @UnstableApi
     private fun playNative(id:String, startTicks:Long=0L) {
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
