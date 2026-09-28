@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 @UnstableApi
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("velaris_tv", MODE_PRIVATE) }
-    private val io = Executors.newSingleThreadExecutor()
+    private val io = Executors.newFixedThreadPool(4)
     private var server = ""
     private var token = ""
     private var userId = ""
@@ -31,7 +31,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         immersive()
         server = prefs.getString("server_url", "").orEmpty()
         token = prefs.getString("access_token", "").orEmpty()
@@ -145,7 +144,12 @@ class MainActivity : Activity() {
                     addRow("Filme", movies)
                     addRow("Serien", series)
                 }
-            } catch(e: Exception) { runOnUiThread { toast("Bibliothek konnte nicht geladen werden: ${e.message}") } }
+            } catch(e: Exception) { runOnUiThread {
+                val root=homeRoot ?: return@runOnUiThread
+                root.let { if(it.childCount>2) it.removeViews(2,it.childCount-2) }
+                root.addView(TextView(this).apply { text="Velaris konnte den Server gerade nicht erreichen."; textSize=20f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; setPadding(0,dp(32),0,dp(18)) })
+                root.addView(button("Erneut versuchen") { loadHome() },params(260,60,8))
+            } }
         }
     }
 
@@ -403,6 +407,7 @@ class MainActivity : Activity() {
             putExtra("itemId",id)
             putExtra("startTicks",startTicks)
             putExtra("nextItemId",nextId)
+            putExtra("autoNext",true)
         })
     }
 
@@ -453,7 +458,7 @@ class MainActivity : Activity() {
         addView(first,params(600,62,22))
     }
     private fun button(label:String, click:()->Unit)=Button(this).apply {
-        text=label; isAllCaps=false; textSize=17f; setTextColor(Color.WHITE); isFocusable=true
+        text=label; contentDescription=label; isAllCaps=false; textSize=17f; setTextColor(Color.WHITE); isFocusable=true; minHeight=dp(48)
         backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205)); setOnClickListener{click()}
     }
     private fun params(w:Int,h:Int,top:Int)=LinearLayout.LayoutParams(if(w<0)w else dp(w),if(h<0)h else dp(h)).apply{topMargin=dp(top)}
