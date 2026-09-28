@@ -7,16 +7,13 @@ import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
@@ -192,7 +189,6 @@ class MainActivity : Activity() {
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
             putExtra("token",token)
-            putExtra("userId",userId)
             putExtra("itemId",id)
             putExtra("startTicks",startTicks)
         })
@@ -222,7 +218,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSettingsDialog() {
-        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Abmelden","Server ändern")) { d,w ->
+        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Abmelden","Server ändern")) { _,w ->
             when(w){0->showHome();1->{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()};2->{clearConnection();showServer()}}
         }.setNegativeButton("Abbrechen",null).show()
     }
