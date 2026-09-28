@@ -241,6 +241,7 @@ class MainActivity : Activity() {
         }
     }
 
+    @UnstableApi
     private fun showSeason(seriesId:String, seasonId:String) {
         io.execute {
             try {
