@@ -133,12 +133,14 @@ class MainActivity : Activity() {
                 val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
                 val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
                 val favorites = items("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val recommended = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=CommunityRating,DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
                 runOnUiThread {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
                     addRow("Neu bei Velaris", latest)
                     addRow("Meine Liste", favorites)
+                    addRow("Für dich", recommended)
                     addRow("Filme", movies)
                     addRow("Serien", series)
                 }
@@ -326,6 +328,11 @@ class MainActivity : Activity() {
                     val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(80),dp(50),dp(80),dp(50)); setBackgroundColor(Color.rgb(8,8,13)) }
                     val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
                     root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
+                    val year=x.optInt("ProductionYear",0)
+                    val rating=x.optDouble("CommunityRating",0.0)
+                    val runtime=x.optLong("RunTimeTicks",0L)/600_000_000L
+                    val meta=listOfNotNull(if(year>0) year.toString() else null, if(runtime>0) "${runtime} Min." else null, if(rating>0) "★ %.1f".format(rating) else null).joinToString("  •  ")
+                    if(meta.isNotBlank()) root.addView(TextView(this).apply { text=meta; textSize=15f; setTextColor(Color.GRAY); gravity=Gravity.CENTER },params(-1,-2,8))
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
                     val userData=x.optJSONObject("UserData")
                     val ticks=userData?.optLong("PlaybackPositionTicks",0L) ?: 0L
@@ -412,7 +419,7 @@ class MainActivity : Activity() {
         backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205)); setOnClickListener{click()}
     }
     private fun params(w:Int,h:Int,top:Int)=LinearLayout.LayoutParams(if(w<0)w else dp(w),if(h<0)h else dp(h)).apply{topMargin=dp(top)}
-    private fun normalize(raw:String):String? { var v=raw.trim();if(v.isBlank())return null;if(!v.startsWith("http"))v="http://$v";val u=runCatching{Uri.parse(v)}.getOrNull()?:return null;return if(u.host.isNullOrBlank())null else v.trimEnd('/') }
+    private fun normalize(raw:String):String? { var v=raw.trim();if(v.isBlank())return null;if(!v.contains("://"))v="http://$v";val u=runCatching{Uri.parse(v)}.getOrNull()?:return null;return if(u.host.isNullOrBlank() || (u.scheme!="http" && u.scheme!="https"))null else v.trimEnd('/') }
     private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
     private fun immersive(){ if(Build.VERSION.SDK_INT>=30) window.insetsController?.apply{hide(WindowInsets.Type.systemBars());systemBarsBehavior=WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE} else @Suppress("DEPRECATION") run{window.decorView.systemUiVisibility=5894} }
