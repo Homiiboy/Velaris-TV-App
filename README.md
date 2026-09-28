@@ -90,9 +90,21 @@ Velaris TV stays API-driven and does not require plugin-specific client SDKs.
 - **Themerr:** Theme media remains server-managed. Velaris deliberately does not autoplay theme audio before 1.0, avoiding unexpected TV audio; metadata/artwork supplied through Jellyfin remains compatible.
 - **Trakt:** Watch-state synchronization remains server-side. Velaris reads and writes Jellyfin's canonical watched state, so Trakt synchronization can operate without exposing Trakt credentials to the TV client.
 
+## Phase 7 — Feature Complete
+
+- Configurable automatic intro, recap and credits skipping
+- Jellyfin Media Segments skip controls retained for manual use
+- Similar-title discovery on detail pages
+- Random episode playback for series
+- Playback preferences stored locally per TV installation
+- Playback diagnostics overlay via the TV INFO key (Direct Play / Transcoding, codec, width and bitrate)
+- Provider/plugin compatibility retained for Intro Skipper, TheIntroDB, metadata providers, Themerr and Trakt
+- Foundation retained for continuous next-episode playback, profiles, My List, watch-state sync, subtitles/audio tracks and recoverable networking
+- Feature freeze milestone reached; remaining work is real-device validation and release hardening
+
 ## Roadmap
 
-Phase 6 is feature-complete as the first release-candidate milestone. Remaining release work is operational: real-device regression testing, signing credentials, final store screenshots/listing and production publishing.
+Phase 7 is the feature-complete milestone. Remaining release work is operational: real-device regression testing, signing credentials, final store screenshots/listing and production publishing.
 
 ## Build
 
