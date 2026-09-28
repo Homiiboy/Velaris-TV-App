@@ -336,6 +336,8 @@ class MainActivity : Activity() {
                     val year=x.optInt("ProductionYear",0)
                     val rating=x.optDouble("CommunityRating",0.0)
                     val runtime=x.optLong("RunTimeTicks",0L)/600_000_000L
+                    val genres=x.optJSONArray("Genres")
+                    val genreText=if(genres!=null) (0 until minOf(genres.length(),3)).joinToString(" • ") { genres.optString(it) } else ""
                     val meta=listOfNotNull(if(year>0) year.toString() else null, if(runtime>0) "${runtime} Min." else null, if(rating>0) "★ %.1f".format(rating) else null).joinToString("  •  ")
                     if(meta.isNotBlank()) root.addView(TextView(this).apply { text=meta; textSize=15f; setTextColor(Color.GRAY); gravity=Gravity.CENTER },params(-1,-2,8))
                     root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
