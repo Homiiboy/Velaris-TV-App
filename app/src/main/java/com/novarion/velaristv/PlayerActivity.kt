@@ -44,6 +44,9 @@ class PlayerActivity : Activity() {
     private val mediaSegments=mutableListOf<MediaSegment>()
     private var skipIntroButton: Button? = null
     private var activeSegment: MediaSegment? = null
+    private var statsText: TextView? = null
+    private var lastPlaybackLabel = "Auto"
+    private var lastMediaInfo = ""
     private val introUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val introUiTick = object : Runnable {
         override fun run() {
@@ -96,9 +99,11 @@ class PlayerActivity : Activity() {
                 }
             }
         }
-        root.addView(skipIntroButton, FrameLayout.LayoutParams(260,72,android.view.Gravity.END or android.view.Gravity.BOTTOM).apply {
+        root.addView(skipIntroButton, FrameLayout.LayoutParams(300,72,android.view.Gravity.END or android.view.Gravity.BOTTOM).apply {
             marginEnd=42; bottomMargin=58
         })
+        statsText=TextView(this).apply { textSize=14f; setTextColor(Color.WHITE); setBackgroundColor(0xAA000000.toInt()); setPadding(18,12,18,12); visibility=View.GONE }
+        root.addView(statsText,FrameLayout.LayoutParams(-2,-2,android.view.Gravity.START or android.view.Gravity.TOP).apply { marginStart=28; topMargin=54 })
         setContentView(root)
 
         val exo = ExoPlayer.Builder(this).build()
@@ -226,8 +231,13 @@ class PlayerActivity : Activity() {
             if(sources.length()==0) throw IllegalStateException("Keine Medienquelle")
             val source=sources.getJSONObject(0)
             mediaSourceId=source.optString("Id")
+            val streams=source.optJSONArray("MediaStreams")
+            var video:JSONObject?=null
+            if(streams!=null) for(i in 0 until streams.length()) { val s=streams.getJSONObject(i); if(s.optString("Type")=="Video") { video=s; break } }
+            lastMediaInfo=listOfNotNull(video?.optString("Codec")?.uppercase()?.takeIf { it.isNotBlank() },video?.optInt("Width")?.takeIf { it>0 }?.let { "${it} px" },source.optLong("Bitrate").takeIf { it>0 }?.let { "${it/1_000_000} Mbps" }).joinToString(" • ")
             val transcoding=source.optString("TranscodingUrl")
-            if(transcoding.isNotBlank()) return if(transcoding.startsWith("http")) transcoding else server+transcoding
+            if(transcoding.isNotBlank()) { lastPlaybackLabel="Transcoding"; return if(transcoding.startsWith("http")) transcoding else server+transcoding }
+            lastPlaybackLabel="Direct Play"
             val container=source.optString("Container","mp4").split(",").firstOrNull().orEmpty().ifBlank{"mp4"}
             val encoded=URLEncoder.encode(mediaSourceId,"UTF-8")
             return "$server/Videos/$id/stream.$container?Static=true&MediaSourceId=$encoded&api_key=$token"
@@ -243,9 +253,15 @@ class PlayerActivity : Activity() {
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { player?.seekForward(); return true }
                 KeyEvent.KEYCODE_MEDIA_REWIND -> { player?.seekBack(); return true }
                 KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> { showTrackMenu(); return true }
+                KeyEvent.KEYCODE_INFO -> { toggleStats(); return true }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun toggleStats() {
+        val v=statsText ?: return
+        if(v.visibility==View.VISIBLE) v.visibility=View.GONE else { v.text="Velaris Wiedergabe\n$lastPlaybackLabel${if(lastMediaInfo.isNotBlank()) "\n$lastMediaInfo" else ""}"; v.visibility=View.VISIBLE }
     }
 
     private fun showTrackMenu() {
