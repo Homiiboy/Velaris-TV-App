@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private var token = ""
     private var userId = ""
     private var homeRoot: LinearLayout? = null
+    @Volatile private var destroyed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +41,7 @@ class MainActivity : Activity() {
         }
     }
 
-    override fun onDestroy() { io.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() { destroyed = true; io.shutdownNow(); super.onDestroy() }
 
     override fun onBackPressed() {
         showSettingsDialog()
@@ -119,7 +120,7 @@ class MainActivity : Activity() {
                 val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
                 val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
-                    homeRoot?.removeViews(2, homeRoot!!.childCount-2)
+                    homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
                     addRow("Neu bei Velaris", latest)
@@ -140,7 +141,8 @@ class MainActivity : Activity() {
 
     private fun addHero(item: JSONObject?) {
         if(item==null) return
-        val id=item.optString("Id"); val title=item.optString("Name","Velaris")
+        val id=item.optString("Id"); if(id.isBlank()) return
+        val title=item.optString("Name","Velaris")
         val hero=FrameLayout(this).apply {
             minimumHeight=dp(330); isFocusable=true
             background=android.graphics.drawable.GradientDrawable().apply { setColor(Color.rgb(18,18,28)); cornerRadius=dp(12).toFloat() }
@@ -163,6 +165,7 @@ class MainActivity : Activity() {
         data.forEach { item ->
             val id=item.optString("Id")
             val type=item.optString("Type")
+            if(id.isBlank()) return@forEach
             val card=LinearLayout(this).apply {
                 orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
                 setPadding(dp(5),dp(5),dp(5),dp(5)); setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
@@ -284,6 +287,7 @@ class MainActivity : Activity() {
     }
 
     private fun playNative(id:String, startTicks:Long=0L) {
+        if(id.isBlank() || server.isBlank() || token.isBlank() || destroyed) return toast("Wiedergabe kann nicht gestartet werden")
         startActivity(android.content.Intent(this, PlayerActivity::class.java).apply {
             putExtra("server",server)
             putExtra("token",token)
@@ -293,26 +297,35 @@ class MainActivity : Activity() {
     }
 
     private fun loadImage(view:ImageView,id:String,type:String,width:Int) {
+        if(id.isBlank() || server.isBlank() || token.isBlank()) return
         io.execute {
             try {
                 val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=90").openConnection() as HttpURLConnection
-                conn.setRequestProperty("X-Emby-Token",token); conn.connectTimeout=6000
-                val bmp=android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-                runOnUiThread { view.setImageBitmap(bmp) }
+                conn.setRequestProperty("X-Emby-Token",token); conn.connectTimeout=6000; conn.readTimeout=8000
+                try {
+                    if(conn.responseCode in 200..299) {
+                        val bmp=conn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
+                        if(bmp != null && !destroyed) runOnUiThread { if(!isFinishing && !isDestroyed) view.setImageBitmap(bmp) }
+                    }
+                } finally { conn.disconnect() }
             } catch(_:Exception){}
         }
     }
 
     private fun request(path:String, method:String="GET", body:String?=null, auth:Boolean=true):JSONObject {
+        if(server.isBlank()) throw IllegalStateException("Kein Server konfiguriert")
         val conn=URL(server+path).openConnection() as HttpURLConnection
-        conn.requestMethod=method; conn.connectTimeout=8000; conn.readTimeout=12000
-        conn.setRequestProperty("Accept","application/json")
-        conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
-        if(body!=null){ conn.doOutput=true; conn.setRequestProperty("Content-Type","application/json"); conn.outputStream.use{it.write(body.toByteArray())} }
-        val code=conn.responseCode
-        val text=(if(code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
-        if(code !in 200..299) throw IllegalStateException("HTTP $code")
-        return if(text.trim().startsWith("[")) JSONObject().put("array",org.json.JSONArray(text)) else if(text.isBlank()) JSONObject() else JSONObject(text)
+        try {
+            conn.requestMethod=method; conn.connectTimeout=8000; conn.readTimeout=12000
+            conn.setRequestProperty("Accept","application/json")
+            conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
+            if(body!=null){ conn.doOutput=true; conn.setRequestProperty("Content-Type","application/json"); conn.outputStream.use{it.write(body.toByteArray())} }
+            val code=conn.responseCode
+            val text=(if(code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
+            if(code == 401 || code == 403) throw SecurityException("Sitzung abgelaufen")
+            if(code !in 200..299) throw IllegalStateException("Serverfehler HTTP $code")
+            return if(text.trim().startsWith("[")) JSONObject().put("array",org.json.JSONArray(text)) else if(text.isBlank()) JSONObject() else JSONObject(text)
+        } finally { conn.disconnect() }
     }
 
     private fun showSettingsDialog() {
