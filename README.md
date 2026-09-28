@@ -80,6 +80,16 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 - Jellyfin client headers aligned to the release-candidate version
 - Intro Skipper / Jellyfin Media Segments integration with a TV-friendly "Intro überspringen" button
 
+## Plugin compatibility before 1.0
+
+Velaris TV stays API-driven and does not require plugin-specific client SDKs.
+
+- **Intro Skipper:** Intro, recap, outro/credits and preview segments are consumed through Jellyfin Media Segments.
+- **TheIntroDB:** Compatible automatically when it exposes the same Jellyfin Media Segments; no separate client configuration is required.
+- **AniList / AniDB / TheTVDB metadata:** Provider-enriched Jellyfin metadata is consumed from the normal item API; genres and provider-updated artwork/metadata therefore appear in Velaris without coupling the app to one provider.
+- **Themerr:** Theme media remains server-managed. Velaris deliberately does not autoplay theme audio before 1.0, avoiding unexpected TV audio; metadata/artwork supplied through Jellyfin remains compatible.
+- **Trakt:** Watch-state synchronization remains server-side. Velaris reads and writes Jellyfin's canonical watched state, so Trakt synchronization can operate without exposing Trakt credentials to the TV client.
+
 ## Roadmap
 
 Phase 6 is feature-complete as the first release-candidate milestone. Remaining release work is operational: real-device regression testing, signing credentials, final store screenshots/listing and production publishing.
