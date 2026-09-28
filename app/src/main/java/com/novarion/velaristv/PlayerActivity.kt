@@ -9,6 +9,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Button
 import android.app.AlertDialog
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -39,6 +40,16 @@ class PlayerActivity : Activity() {
     private var userId = ""
     private var mediaSourceId = ""
     private var availableTracks: Tracks? = null
+    private var introStartMs = -1L
+    private var introEndMs = -1L
+    private var skipIntroButton: Button? = null
+    private val introUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val introUiTick = object : Runnable {
+        override fun run() {
+            updateIntroButton()
+            introUiHandler.postDelayed(this, 500L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +78,25 @@ class PlayerActivity : Activity() {
             text = "VELARIS"; textSize = 16f; setTextColor(0x99FFFFFF.toInt())
             setPadding(28, 18, 0, 0)
         })
+        skipIntroButton = Button(this).apply {
+            text = "Intro überspringen"
+            contentDescription = "Intro überspringen"
+            isAllCaps = false
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205))
+            visibility = View.GONE
+            setOnClickListener {
+                if(introEndMs > 0) {
+                    player?.seekTo(introEndMs)
+                    visibility = View.GONE
+                    playerView.requestFocus()
+                }
+            }
+        }
+        root.addView(skipIntroButton, FrameLayout.LayoutParams(260,72,android.view.Gravity.END or android.view.Gravity.BOTTOM).apply {
+            marginEnd=42; bottomMargin=58
+        })
         setContentView(root)
 
         val exo = ExoPlayer.Builder(this).build()
@@ -93,6 +123,7 @@ class PlayerActivity : Activity() {
         })
 
         preparePlayback(exo, itemId, startTicks)
+        introUiHandler.post(introUiTick)
         playerView.requestFocus()
     }
 
@@ -117,6 +148,9 @@ class PlayerActivity : Activity() {
     }
 
     private fun preparePlayback(exo: ExoPlayer, id:String, resumeTicks:Long) {
+        introStartMs=-1L; introEndMs=-1L
+        skipIntroButton?.visibility=View.GONE
+        loadIntroSegment(id)
         io.execute {
             val url = try { resolvePlaybackUrl(id) } catch (_:Exception) { "$server/Videos/$id/stream?static=true&api_key=$token" }
             runOnUiThread {
@@ -126,6 +160,44 @@ class PlayerActivity : Activity() {
                 if(resumeTicks > 0) exo.seekTo(resumeTicks / 10_000L)
                 exo.playWhenReady=true
             }
+        }
+    }
+
+    private fun loadIntroSegment(id:String) {
+        io.execute {
+            try {
+                val encoded=URLEncoder.encode("Intro","UTF-8")
+                val c=URL("$server/MediaSegments/$id?includeSegmentTypes=$encoded").openConnection() as HttpURLConnection
+                try {
+                    c.connectTimeout=6000; c.readTimeout=8000
+                    c.setRequestProperty("Accept","application/json")
+                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
+                    if(c.responseCode in 200..299) {
+                        val json=JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                        val arr=json.optJSONArray("Items")
+                        if(arr!=null) for(i in 0 until arr.length()) {
+                            val s=arr.getJSONObject(i)
+                            if(s.optString("Type").equals("Intro",true)) {
+                                introStartMs=s.optLong("StartTicks",0L)/10_000L
+                                introEndMs=s.optLong("EndTicks",0L)/10_000L
+                                break
+                            }
+                        }
+                    }
+                } finally { c.disconnect() }
+            } catch(_:Exception) {}
+        }
+    }
+
+    private fun updateIntroButton() {
+        val p=player ?: return
+        val show=introStartMs>=0 && introEndMs>introStartMs && p.currentPosition in introStartMs until introEndMs
+        val button=skipIntroButton ?: return
+        if(show && button.visibility!=View.VISIBLE) {
+            button.visibility=View.VISIBLE
+            button.requestFocus()
+        } else if(!show && button.visibility==View.VISIBLE) {
+            button.visibility=View.GONE
         }
     }
 
@@ -200,7 +272,7 @@ class PlayerActivity : Activity() {
         super.onStop()
     }
 
-    override fun onDestroy() { io.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() { introUiHandler.removeCallbacks(introUiTick); io.shutdownNow(); super.onDestroy() }
 
     private fun reportStoppedOnce() {
         if (stoppedReported) return
@@ -227,7 +299,7 @@ class PlayerActivity : Activity() {
                 try {
                 c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 6000; c.readTimeout = 6000
                 c.setRequestProperty("Content-Type","application/json")
-                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.5.0", Token="$token"""")
+                c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0", Token="$token"""")
                 c.outputStream.use { it.write(body.toByteArray()) }
                 c.responseCode
                 } finally { c.disconnect() }
