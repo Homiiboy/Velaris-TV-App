@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -28,6 +29,7 @@ class PlayerActivity : Activity() {
     private var token = ""
     private var startTicks = 0L
     private var sessionStarted = false
+    private var stoppedReported = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +37,11 @@ class PlayerActivity : Activity() {
         token = intent.getStringExtra("token").orEmpty()
         itemId = intent.getStringExtra("itemId").orEmpty()
         startTicks = intent.getLongExtra("startTicks", 0L)
+        if (server.isBlank() || token.isBlank() || itemId.isBlank()) {
+            android.widget.Toast.makeText(this, "Ungültige Wiedergabeparameter", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         immersive()
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -60,7 +67,10 @@ class PlayerActivity : Activity() {
                 else if (!isPlaying && sessionStarted) report("Progress")
             }
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) report("Stopped")
+                if (state == Player.STATE_ENDED) reportStoppedOnce()
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                android.widget.Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.errorCodeName}", android.widget.Toast.LENGTH_LONG).show()
             }
         })
 
@@ -86,12 +96,18 @@ class PlayerActivity : Activity() {
     }
 
     override fun onStop() {
-        report("Stopped")
+        reportStoppedOnce()
         player?.release(); player = null
         super.onStop()
     }
 
     override fun onDestroy() { io.shutdownNow(); super.onDestroy() }
+
+    private fun reportStoppedOnce() {
+        if (stoppedReported) return
+        stoppedReported = true
+        report("Stopped")
+    }
 
     private fun report(kind: String) {
         val p = player ?: return
@@ -109,7 +125,7 @@ class PlayerActivity : Activity() {
                     else -> "/Sessions/Playing/Progress"
                 }
                 val c = URL(server + endpoint).openConnection() as HttpURLConnection
-                c.requestMethod = "POST"; c.doOutput = true
+                c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 6000; c.readTimeout = 6000
                 c.setRequestProperty("Content-Type","application/json")
                 c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0", Token="$token"""")
                 c.outputStream.use { it.write(body.toByteArray()) }
