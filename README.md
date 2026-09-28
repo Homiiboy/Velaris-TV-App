@@ -6,7 +6,7 @@
 
 Velaris TV is a native Android TV / Google TV client with a custom Velaris interface. It connects directly to a Jellyfin server and uses Jellyfin for authentication, libraries, metadata, images and playback progress.
 
-## Current status — Phase 2
+## Phase 2 — Complete
 
 - Native Android TV / Google TV app
 - Custom Velaris UI instead of the Jellyfin Web UI
@@ -14,8 +14,11 @@ Velaris TV is a native Android TV / Google TV client with a custom Velaris inter
 - First-run Jellyfin server setup
 - Jellyfin user login
 - Stored server URL and session
-- Home screen with Continue Watching, latest media and movies
-- Native movie / media details
+- Home screen with Continue Watching, latest media, movies, series and My List
+- Native movie, series, season and episode navigation
+- Search across movies and series
+- Jellyfin favorites / My List integration
+- Automatic next-episode playback
 - Native Media3 / ExoPlayer playback
 - Resume playback from Jellyfin progress
 - Playback progress reporting to Jellyfin
@@ -36,7 +39,7 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 
 ## Roadmap
 
-Phase 2 continues with series, seasons and episodes, next-episode playback, search, favorites / My List and a more polished streaming-TV interface.
+Phase 2 is feature-complete. Future work can focus on Phase 3 polish such as richer episode cards, playback selection/transcoding, improved contextual back navigation and further streaming-TV UI refinement.
 
 ## Build
 
