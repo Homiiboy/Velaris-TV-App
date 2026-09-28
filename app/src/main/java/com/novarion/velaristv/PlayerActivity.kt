@@ -9,9 +9,13 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.app.AlertDialog
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -33,6 +37,7 @@ class PlayerActivity : Activity() {
     private var stoppedReported = false
     private var nextItemId = ""
     private var mediaSourceId = ""
+    private var availableTracks: Tracks? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +84,7 @@ class PlayerActivity : Activity() {
                     }
                 }
             }
+            override fun onTracksChanged(tracks: Tracks) { availableTracks=tracks }
             override fun onPlayerError(error: PlaybackException) {
                 android.widget.Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.errorCodeName}", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -131,9 +137,39 @@ class PlayerActivity : Activity() {
                 KeyEvent.KEYCODE_MEDIA_PAUSE -> { player?.pause(); return true }
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { player?.seekForward(); return true }
                 KeyEvent.KEYCODE_MEDIA_REWIND -> { player?.seekBack(); return true }
+                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> { showTrackMenu(); return true }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun showTrackMenu() {
+        val exo=player ?: return
+        val tracks=availableTracks ?: return
+        val choices=mutableListOf<Pair<String,Pair<Tracks.Group,Int>>>()
+        for(group in tracks.groups) {
+            if(group.type!=C.TRACK_TYPE_AUDIO && group.type!=C.TRACK_TYPE_TEXT) continue
+            for(i in 0 until group.length) {
+                if(!group.isTrackSupported(i)) continue
+                val format=group.getTrackFormat(i)
+                val kind=if(group.type==C.TRACK_TYPE_AUDIO) "Audio" else "Untertitel"
+                val label=format.label ?: format.language ?: "Spur ${i+1}"
+                choices.add("$kind: $label" to (group to i))
+            }
+        }
+        val labels=mutableListOf("Untertitel aus")
+        labels.addAll(choices.map{it.first})
+        AlertDialog.Builder(this).setTitle("Audio & Untertitel").setItems(labels.toTypedArray()) { _,which ->
+            if(which==0) {
+                exo.trackSelectionParameters=exo.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT,true).build()
+            } else {
+                val (group,index)=choices[which-1].second
+                val builder=exo.trackSelectionParameters.buildUpon()
+                if(group.type==C.TRACK_TYPE_TEXT) builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false)
+                builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup,index))
+                exo.trackSelectionParameters=builder.build()
+            }
+        }.setNegativeButton("Schließen",null).show()
     }
 
     override fun onStop() {
@@ -166,12 +202,13 @@ class PlayerActivity : Activity() {
                     else -> "/Sessions/Playing/Progress"
                 }
                 val c = URL(server + endpoint).openConnection() as HttpURLConnection
+                try {
                 c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 6000; c.readTimeout = 6000
                 c.setRequestProperty("Content-Type","application/json")
                 c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.2.0", Token="$token"""")
                 c.outputStream.use { it.write(body.toByteArray()) }
                 c.responseCode
-                c.disconnect()
+                } finally { c.disconnect() }
             } catch (_: Exception) {}
         }
     }
