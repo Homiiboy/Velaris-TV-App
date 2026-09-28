@@ -128,7 +128,7 @@ class MainActivity : Activity() {
     private fun loadHome() {
         io.execute {
             try {
-                val resume = items("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview&MediaTypes=Video")
+                val resume = items("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview,RunTimeTicks&MediaTypes=Video")
                 val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
                 val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
                 val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
@@ -196,7 +196,10 @@ class MainActivity : Activity() {
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
             card.addView(img, LinearLayout.LayoutParams(dp(180),dp(260)))
             loadImage(img,id,"Primary",360)
-            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1 }, LinearLayout.LayoutParams(dp(180),dp(38)))
+            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1 }, LinearLayout.LayoutParams(dp(180),dp(30)))
+            val progress=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+            val total=item.optLong("RunTimeTicks",0L)
+            if(progress>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { max=1000; this.progress=((progress.toDouble()/total)*1000).toInt().coerceIn(0,1000); contentDescription="Wiedergabefortschritt" },LinearLayout.LayoutParams(dp(180),dp(8)))
             row.addView(card, LinearLayout.LayoutParams(dp(194),dp(315)).apply { marginEnd=dp(12) })
         }
         homeRoot?.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(row) }, LinearLayout.LayoutParams(-1,dp(325)))
@@ -464,7 +467,7 @@ class MainActivity : Activity() {
         try {
             conn.requestMethod=method; conn.connectTimeout=8000; conn.readTimeout=12000
             conn.setRequestProperty("Accept","application/json")
-            conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.6.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
+            conn.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0"${if(auth && token.isNotBlank()) ", Token=\"$token\"" else ""}""")
             if(body!=null){ conn.doOutput=true; conn.setRequestProperty("Content-Type","application/json"); conn.outputStream.use{it.write(body.toByteArray())} }
             val code=conn.responseCode
             val text=(if(code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
