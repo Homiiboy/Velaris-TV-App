@@ -345,13 +345,42 @@ class MainActivity : Activity() {
                     val ticks=userData?.optLong("PlaybackPositionTicks",0L) ?: 0L
                     val favorite=userData?.optBoolean("IsFavorite",false) ?: false
                     val played=userData?.optBoolean("Played",false) ?: false
+                    val type=x.optString("Type")
                     root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
                     root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(id,!favorite) { showDetails(id) } },params(260,58,10))
+                    root.addView(button("Ähnliche Titel") { showSimilar(id) },params(260,58,10))
+                    if(type=="Series") root.addView(button("Zufällige Folge") { playRandomEpisode(id) },params(260,58,10))
                     root.addView(button(if(played) "↺ Als ungesehen markieren" else "✓ Als gesehen markieren") { setPlayed(id,!played) { showDetails(id) } },params(300,58,10))
                     root.addView(button("Zurück") { showHome() },params(220,58,10))
                     setContentView(root)
                 }
             } catch(e:Exception){ runOnUiThread{toast("Details konnten nicht geladen werden")} }
+        }
+    }
+
+    private fun showSimilar(id:String) {
+        rememberBack { showDetails(id) }
+        io.execute {
+            try {
+                val data=items("/Items/$id/Similar?UserId=$userId&Limit=20&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply { text="Ähnliche Titel"; textSize=32f; setTextColor(Color.WHITE) })
+                    homeRoot=root; addRow("Das könnte dir gefallen",data)
+                    root.addView(button("Zurück") { showDetails(id) },params(220,56,18))
+                    setContentView(ScrollView(this).apply { addView(root) })
+                }
+            } catch(e:Exception) { runOnUiThread { toast("Ähnliche Titel konnten nicht geladen werden") } }
+        }
+    }
+
+    private fun playRandomEpisode(seriesId:String) {
+        io.execute {
+            try {
+                val data=items("/Users/$userId/Items?Recursive=true&ParentId=$seriesId&IncludeItemTypes=Episode&Limit=200")
+                val ep=if(data.isEmpty()) null else data[java.util.concurrent.ThreadLocalRandom.current().nextInt(data.size)]
+                runOnUiThread { if(ep==null) toast("Keine Episode gefunden") else playNative(ep.optString("Id"),0L) }
+            } catch(e:Exception) { runOnUiThread { toast("Zufällige Folge konnte nicht gestartet werden") } }
         }
     }
 
@@ -446,9 +475,18 @@ class MainActivity : Activity() {
     }
 
     private fun showSettingsDialog() {
-        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Abmelden","Server ändern")) { _,w ->
-            when(w){0->showHome();1->{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()};2->{clearConnection();showServer()}}
+        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Wiedergabe-Einstellungen","Abmelden","Server ändern")) { _,w ->
+            when(w){0->showHome();1->showPlaybackSettings();2->{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()};3->{clearConnection();showServer()}}
         }.setNegativeButton("Abbrechen",null).show()
+    }
+
+    private fun showPlaybackSettings() {
+        val labels=arrayOf("Automatisch nächste Folge","Intro automatisch überspringen","Rückblick automatisch überspringen","Abspann automatisch überspringen")
+        val keys=arrayOf("auto_next","auto_skip_intro","auto_skip_recap","auto_skip_credits")
+        val values=BooleanArray(keys.size) { prefs.getBoolean(keys[it], it==0) }
+        android.app.AlertDialog.Builder(this).setTitle("Wiedergabe").setMultiChoiceItems(labels,values) { _,which,checked -> values[which]=checked }
+            .setPositiveButton("Speichern") { _,_ -> val e=prefs.edit(); keys.forEachIndexed { i,k -> e.putBoolean(k,values[i]) }; e.apply() }
+            .setNegativeButton("Abbrechen",null).show()
     }
 
     private fun clearConnection(){ server="";token="";userId="";prefs.edit().clear().apply() }
