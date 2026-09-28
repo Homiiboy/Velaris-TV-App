@@ -48,9 +48,19 @@ Velaris TV talks directly to the Jellyfin API. A separate Velaris Web instance i
 - User-aware playback negotiation
 - Automatic next-episode playback retained across the native player flow
 
+## Phase 4 — Complete
+
+- Audio and subtitle track selection from the TV remote menu/settings key
+- Subtitle disable option
+- Personalized "Für dich" home row
+- Richer movie metadata with year, runtime and community rating
+- Safer Jellyfin server URL validation
+- Hardened playback progress connection cleanup
+- Existing Jellyfin user account acts as the active Velaris profile
+
 ## Roadmap
 
-Phase 3 is feature-complete. Future work can focus on Phase 4 features such as audio/subtitle track selection, profiles, recommendations, advanced home personalization and further visual refinement.
+Phase 4 is feature-complete. Future phases can focus on multi-user profile switching on one device, deeper recommendation logic, watch-state controls, accessibility and final release/store polish.
 
 ## Build
 
