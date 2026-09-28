@@ -96,7 +96,12 @@ class MainActivity : Activity() {
         homeRoot=root
         val top = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
         top.addView(ImageView(this).apply { setImageResource(R.drawable.velaris_logo); scaleType=ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(dp(120),dp(62)))
-        top.addView(TextView(this).apply { text="  Startseite     Filme     Serien"; setTextColor(Color.WHITE); textSize=18f }, LinearLayout.LayoutParams(0,dp(62),1f))
+        val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+        nav.addView(button("Startseite") { showHome() }, LinearLayout.LayoutParams(dp(150),dp(54)))
+        nav.addView(button("Filme") { showLibrary("Filme","Movie") }, LinearLayout.LayoutParams(dp(130),dp(54)))
+        nav.addView(button("Serien") { showLibrary("Serien","Series") }, LinearLayout.LayoutParams(dp(130),dp(54)))
+        nav.addView(button("Suche") { showSearch() }, LinearLayout.LayoutParams(dp(130),dp(54)))
+        top.addView(nav, LinearLayout.LayoutParams(0,dp(62),1f))
         top.addView(button("⚙") { showSettingsDialog() }, LinearLayout.LayoutParams(dp(72),dp(54)))
         root.addView(top)
         root.addView(TextView(this).apply { text="Dein Velaris"; setTextColor(Color.WHITE); textSize=32f; setPadding(0,dp(16),0,dp(8)) })
@@ -111,12 +116,14 @@ class MainActivity : Activity() {
                 val resume = items("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview&MediaTypes=Video")
                 val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
                 val movies = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio")
+                val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
                     homeRoot?.removeViews(2, homeRoot!!.childCount-2)
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
                     addRow("Neu bei Velaris", latest)
                     addRow("Filme", movies)
+                    addRow("Serien", series)
                 }
             } catch(e: Exception) { runOnUiThread { toast("Bibliothek konnte nicht geladen werden: ${e.message}") } }
         }
@@ -154,9 +161,10 @@ class MainActivity : Activity() {
         val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(4),dp(8),dp(4),dp(18)) }
         data.forEach { item ->
             val id=item.optString("Id")
+            val type=item.optString("Type")
             val card=LinearLayout(this).apply {
                 orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
-                setPadding(dp(5),dp(5),dp(5),dp(5)); setOnClickListener { showDetails(id) }
+                setPadding(dp(5),dp(5),dp(5),dp(5)); setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
                 setOnFocusChangeListener { v, focused -> v.animate().scaleX(if(focused)1.08f else 1f).scaleY(if(focused)1.08f else 1f).setDuration(120).start() }
             }
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
@@ -167,6 +175,95 @@ class MainActivity : Activity() {
         }
         homeRoot?.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(row) }, LinearLayout.LayoutParams(-1,dp(325)))
     }
+
+
+    private fun showLibrary(title:String, type:String) {
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+        root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE) })
+        root.addView(ProgressBar(this))
+        setContentView(ScrollView(this).apply { addView(root) })
+        io.execute {
+            try {
+                val data=items("/Users/$userId/Items?Recursive=true&Limit=100&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    root.removeViewAt(1)
+                    homeRoot=root
+                    addRow(title,data)
+                }
+            } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
+        }
+    }
+
+    private fun showSearch() {
+        val input=EditText(this).apply { hint="Filme und Serien suchen"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine() }
+        val root=setupPage("Suche","Durchsuche deine Jellyfin-Mediathek",input)
+        root.addView(button("Suchen") {
+            val q=input.text.toString().trim()
+            if(q.isNotBlank()) search(q)
+        },params(240,60,16))
+        root.addView(button("Zurück") { showHome() },params(220,56,10))
+        setContentView(root); input.requestFocus()
+    }
+
+    private fun search(query:String) {
+        val encoded=java.net.URLEncoder.encode(query,"UTF-8")
+        io.execute {
+            try {
+                val data=items("/Users/$userId/Items?Recursive=true&Limit=50&SearchTerm=$encoded&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply { text="Suchergebnisse für „$query“"; textSize=30f; setTextColor(Color.WHITE) })
+                    homeRoot=root
+                    addRow("Ergebnisse",data)
+                    root.addView(button("Neue Suche") { showSearch() },params(220,56,16))
+                    setContentView(ScrollView(this).apply { addView(root) })
+                }
+            } catch(e:Exception){ runOnUiThread{toast("Suche fehlgeschlagen")} }
+        }
+    }
+
+    private fun showSeries(seriesId:String) {
+        io.execute {
+            try {
+                val series=request("/Users/$userId/Items/$seriesId")
+                val seasons=items("/Shows/$seriesId/Seasons?UserId=$userId&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply { text=series.optString("Name"); textSize=34f; setTextColor(Color.WHITE) })
+                    root.addView(TextView(this).apply { text=series.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); maxLines=4 },params(-1,-2,12))
+                    seasons.forEach { season ->
+                        root.addView(button(season.optString("Name","Staffel")) { showSeason(seriesId,season.optString("Id")) },params(360,58,12))
+                    }
+                    root.addView(button("Zurück") { showHome() },params(220,56,18))
+                    setContentView(ScrollView(this).apply { addView(root) })
+                }
+            } catch(e:Exception){ runOnUiThread{toast("Serie konnte nicht geladen werden")} }
+        }
+    }
+
+    private fun showSeason(seriesId:String, seasonId:String) {
+        io.execute {
+            try {
+                val episodes=items("/Shows/$seriesId/Episodes?UserId=$userId&SeasonId=$seasonId&Fields=Overview,PrimaryImageAspectRatio")
+                runOnUiThread {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply { text="Episoden"; textSize=32f; setTextColor(Color.WHITE) })
+                    episodes.forEach { ep ->
+                        val eid=ep.optString("Id")
+                        val ticks=ep.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+                        val number=ep.optInt("IndexNumber",0)
+                        val name=ep.optString("Name")
+                        root.addView(button((if(number>0) "$number. " else "")+name) { startEpisode(eid,ticks) },params(-1,62,8))
+                    }
+                    root.addView(button("Zurück zur Serie") { showSeries(seriesId) },params(260,56,18))
+                    setContentView(ScrollView(this).apply { addView(root) })
+                }
+            } catch(e:Exception){ runOnUiThread{toast("Episoden konnten nicht geladen werden")} }
+        }
+    }
+
+    @UnstableApi
+    private fun startEpisode(id:String,ticks:Long)=playNative(id,ticks)
 
     private fun showDetails(id:String) {
         io.execute {
