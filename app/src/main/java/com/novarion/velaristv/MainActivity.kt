@@ -400,6 +400,30 @@ class MainActivity : Activity() {
     }
 
 
+    private fun addLibraryGrid(data:List<JSONObject>) {
+        if(data.isEmpty()) return
+        val grid=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; clipChildren=false; clipToPadding=false; setPadding(dp(12),dp(20),dp(12),dp(42)) }
+        data.chunked(5).forEach { items ->
+            val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.START; clipChildren=false; clipToPadding=false }
+            items.forEach { item ->
+                val id=item.optString("Id"); if(id.isBlank()) return@forEach
+                val type=item.optString("Type")
+                val card=LinearLayout(this).apply {
+                    orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true; clipChildren=false
+                    setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
+                    applyCardFocus(this)
+                }
+                val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+                card.addView(img,LinearLayout.LayoutParams(dp(196),dp(276)))
+                loadImage(img,id,"Primary",460)
+                card.addView(TextView(this).apply { text=item.optString("Name"); textSize=15f; setTextColor(Color.WHITE); maxLines=1; setPadding(dp(4),dp(7),dp(4),0) },LinearLayout.LayoutParams(dp(196),dp(30)))
+                row.addView(card,LinearLayout.LayoutParams(dp(212),dp(326)).apply { marginEnd=dp(16); bottomMargin=dp(18) })
+            }
+            grid.addView(row,LinearLayout.LayoutParams(-1,dp(344)))
+        }
+        homeRoot?.addView(grid,LinearLayout.LayoutParams(-1,-2))
+    }
+
     private fun showMediaFolderLibrary(title:String, type:String) {
         rememberBack { showHome() }
         val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
@@ -424,7 +448,7 @@ class MainActivity : Activity() {
                         val names=views.mapNotNull{it.optString("Name").takeIf(String::isNotBlank)}.joinToString(", ")
                         root.addView(TextView(this).apply { text="Die Jellyfin-Bibliothek „$title“ wurde nicht gefunden.${if(names.isNotBlank()) "\nGefunden: $names" else ""}"; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
                     } else if(data.isEmpty()) root.addView(TextView(this).apply { text="In „$title“ wurden keine passenden Inhalte gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
-                    else addRow(title,data)
+                    else addLibraryGrid(data)
                 }
             } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
         }
@@ -442,7 +466,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     root.removeViewAt(1); homeRoot=root
                     if(data.isEmpty()) root.addView(TextView(this).apply { text="Keine $title gefunden. Prüfe, ob deine Jellyfin-Titel das Genre „Anime“ verwenden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
-                    else addRow(title,data)
+                    else addLibraryGrid(data)
                 }
             } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
         }
@@ -460,7 +484,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     root.removeViewAt(1)
                     homeRoot=root
-                    addRow(title,data)
+                    addLibraryGrid(data)
                 }
             } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
         }
