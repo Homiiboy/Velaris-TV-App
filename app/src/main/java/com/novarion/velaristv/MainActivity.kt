@@ -2,12 +2,15 @@ package com.novarion.velaristv
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.KeyEvent
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.*
@@ -102,26 +105,48 @@ class MainActivity : Activity() {
 
     private fun showHome() {
         if(!suppressHistory) backStack.clear()
+
         val root = LinearLayout(this).apply {
-            orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(8,8,13))
-            setPadding(dp(48),dp(24),dp(48),dp(24))
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(8,8,13))
+            setPadding(0,0,0,dp(28))
+            clipToPadding = false
         }
-        homeRoot=root
-        val top = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
-        top.addView(ImageView(this).apply { setImageResource(R.drawable.velaris_logo); scaleType=ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(dp(120),dp(62)))
-        val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
-        nav.addView(button("Startseite") { showHome() }, LinearLayout.LayoutParams(dp(150),dp(54)))
-        nav.addView(button("Filme") { showLibrary("Filme","Movie") }, LinearLayout.LayoutParams(dp(130),dp(54)))
-        nav.addView(button("Serien") { showLibrary("Serien","Series") }, LinearLayout.LayoutParams(dp(130),dp(54)))
-        nav.addView(button("Meine Liste") { showFavorites() }, LinearLayout.LayoutParams(dp(160),dp(54)))
-        nav.addView(button("Suche") { showSearch() }, LinearLayout.LayoutParams(dp(130),dp(54)))
-        top.addView(nav, LinearLayout.LayoutParams(0,dp(62),1f))
-        top.addView(button("👤") { showProfiles() }, LinearLayout.LayoutParams(dp(72),dp(54)))
-        top.addView(button("⚙") { showSettingsDialog() }, LinearLayout.LayoutParams(dp(72),dp(54)))
-        root.addView(top)
-        root.addView(TextView(this).apply { text="Dein Velaris"; setTextColor(Color.WHITE); textSize=32f; setPadding(0,dp(16),0,dp(8)) })
-        root.addView(ProgressBar(this))
-        setContentView(ScrollView(this).apply { addView(root) })
+        homeRoot = root
+
+        // Streaming-style navigation: deliberately quiet; purple is reserved for focus/actions.
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(52),dp(20),dp(52),dp(10))
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val homeButton = navButton("Startseite") { showHome() }
+        val moviesButton = navButton("Filme") { showLibrary("Filme","Movie") }
+        val seriesButton = navButton("Serien") { showLibrary("Serien","Series") }
+        val listButton = navButton("Meine Liste") { showFavorites() }
+        val searchButton = navButton("Suche") { showSearch() }
+        listOf(homeButton,moviesButton,seriesButton,listButton,searchButton).forEach {
+            nav.addView(it, LinearLayout.LayoutParams(-2,dp(48)).apply { marginEnd=dp(8) })
+        }
+        top.addView(nav, LinearLayout.LayoutParams(0,dp(52),1f))
+        val profile = navButton("Profil") { showProfiles() }
+        val settings = navButton("⚙") { showSettingsDialog() }
+        top.addView(profile, LinearLayout.LayoutParams(dp(96),dp(48)).apply { marginEnd=dp(8) })
+        top.addView(settings, LinearLayout.LayoutParams(dp(64),dp(48)))
+        root.addView(top, LinearLayout.LayoutParams(-1,dp(82)))
+
+        root.addView(ProgressBar(this).apply { isIndeterminate=true },
+            LinearLayout.LayoutParams(-1,dp(5)))
+
+        setContentView(ScrollView(this).apply {
+            isVerticalScrollBarEnabled=false
+            clipToPadding=false
+            addView(root)
+        })
         loadHome()
     }
 
@@ -165,44 +190,108 @@ class MainActivity : Activity() {
         if(item==null) return
         val id=item.optString("Id"); if(id.isBlank()) return
         val title=item.optString("Name","Velaris")
+        val overview=item.optString("Overview")
+        val year=item.optInt("ProductionYear",0)
+        val rating=item.optDouble("CommunityRating",0.0)
+        val ticks=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+
         val hero=FrameLayout(this).apply {
-            minimumHeight=dp(330); isFocusable=true
-            background=android.graphics.drawable.GradientDrawable().apply { setColor(Color.rgb(18,18,28)); cornerRadius=dp(12).toFloat() }
-            setOnClickListener { showDetails(id) }
+            minimumHeight=dp(480)
+            setBackgroundColor(Color.rgb(12,12,18))
         }
         val image=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
-        hero.addView(image, FrameLayout.LayoutParams(-1,dp(330)))
-        loadImage(image, id, "Backdrop", 1280)
-        val shade=View(this).apply { background=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.rgb(8,8,13),0x2208080D)) }
-        hero.addView(shade, FrameLayout.LayoutParams(-1,-1))
-        val text=TextView(this).apply { this.text=title; textSize=36f; setTextColor(Color.WHITE); gravity=Gravity.BOTTOM; setPadding(dp(32),0,0,dp(34)) }
-        hero.addView(text, FrameLayout.LayoutParams(-1,-1))
-        homeRoot?.addView(hero, LinearLayout.LayoutParams(-1,dp(330)).apply { bottomMargin=dp(26) })
+        hero.addView(image, FrameLayout.LayoutParams(-1,dp(480)))
+        loadImage(image,id,"Backdrop",1600)
+
+        val shade=View(this).apply {
+            background=GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xF708080D.toInt(),0xB808080D.toInt(),0x3308080D,0x0808080D)
+            )
+        }
+        hero.addView(shade,FrameLayout.LayoutParams(-1,-1))
+
+        val info=LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL
+            gravity=Gravity.BOTTOM
+            setPadding(dp(58),0,dp(58),dp(50))
+        }
+        info.addView(TextView(this).apply {
+            text=title; textSize=42f; setTextColor(Color.WHITE); typeface=Typeface.DEFAULT_BOLD
+        })
+        val meta=listOfNotNull(
+            if(year>0) year.toString() else null,
+            if(rating>0) "★ %.1f".format(rating) else null
+        ).joinToString("   •   ")
+        if(meta.isNotBlank()) info.addView(TextView(this).apply {
+            text=meta; textSize=17f; setTextColor(Color.LTGRAY); setPadding(0,dp(8),0,0)
+        })
+        if(overview.isNotBlank()) info.addView(TextView(this).apply {
+            text=overview; textSize=17f; setTextColor(Color.WHITE); maxLines=3
+            setPadding(0,dp(12),0,0)
+        },LinearLayout.LayoutParams(dp(650),-2))
+
+        val actions=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            setPadding(0,dp(20),0,0)
+        }
+        actions.addView(actionButton(if(ticks>0) "▶  Fortsetzen" else "▶  Abspielen",true) {
+            playNative(id,ticks)
+        },LinearLayout.LayoutParams(dp(220),dp(58)).apply { marginEnd=dp(12) })
+        actions.addView(actionButton("+  Meine Liste",false) { showDetails(id) },
+            LinearLayout.LayoutParams(dp(210),dp(58)))
+        info.addView(actions)
+        hero.addView(info,FrameLayout.LayoutParams(-1,-1))
+        homeRoot?.addView(hero,LinearLayout.LayoutParams(-1,dp(480)).apply { bottomMargin=dp(8) })
     }
 
     private fun addRow(title: String, data: List<JSONObject>) {
         if(data.isEmpty()) return
-        homeRoot?.addView(TextView(this).apply { text=title; setTextColor(Color.WHITE); textSize=23f; setPadding(0,dp(12),0,dp(10)) })
-        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(4),dp(8),dp(4),dp(18)) }
+        homeRoot?.addView(TextView(this).apply {
+            text=title; setTextColor(Color.WHITE); textSize=24f; typeface=Typeface.DEFAULT_BOLD
+            setPadding(dp(52),dp(18),0,dp(8))
+        })
+        val row=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            setPadding(dp(52),dp(8),dp(52),dp(22))
+            clipChildren=false
+            clipToPadding=false
+        }
         data.forEach { item ->
             val id=item.optString("Id")
             val type=item.optString("Type")
             if(id.isBlank()) return@forEach
             val card=LinearLayout(this).apply {
                 orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
-                setPadding(dp(5),dp(5),dp(5),dp(5)); setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
-                setOnFocusChangeListener { v, focused -> v.animate().scaleX(if(focused)1.08f else 1f).scaleY(if(focused)1.08f else 1f).setDuration(120).start() }
+                setPadding(dp(3),dp(3),dp(3),dp(3))
+                setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
+                setOnFocusChangeListener { v, focused ->
+                    v.animate().scaleX(if(focused)1.10f else 1f).scaleY(if(focused)1.10f else 1f)
+                        .translationZ(if(focused)dp(12).toFloat() else 0f).setDuration(130).start()
+                    v.background = if(focused) GradientDrawable().apply {
+                        setStroke(dp(3),Color.rgb(126,87,255)); cornerRadius=dp(8).toFloat()
+                        setColor(Color.TRANSPARENT)
+                    } else null
+                }
             }
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
-            card.addView(img, LinearLayout.LayoutParams(dp(180),dp(260)))
-            loadImage(img,id,"Primary",360)
-            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1 }, LinearLayout.LayoutParams(dp(180),dp(30)))
+            card.addView(img,LinearLayout.LayoutParams(dp(176),dp(248)))
+            loadImage(img,id,"Primary",420)
+            card.addView(TextView(this).apply {
+                text=item.optString("Name"); setTextColor(Color.WHITE); textSize=14f; maxLines=1
+                setPadding(dp(2),dp(7),0,0)
+            },LinearLayout.LayoutParams(dp(176),dp(34)))
             val progress=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
             val total=item.optLong("RunTimeTicks",0L)
-            if(progress>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { max=1000; this.progress=((progress.toDouble()/total)*1000).toInt().coerceIn(0,1000); contentDescription="Wiedergabefortschritt" },LinearLayout.LayoutParams(dp(180),dp(8)))
-            row.addView(card, LinearLayout.LayoutParams(dp(194),dp(315)).apply { marginEnd=dp(12) })
+            if(progress>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
+                max=1000; this.progress=((progress.toDouble()/total)*1000).toInt().coerceIn(0,1000)
+                progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(126,87,255))
+            },LinearLayout.LayoutParams(dp(176),dp(5)))
+            row.addView(card,LinearLayout.LayoutParams(dp(188),dp(304)).apply { marginEnd=dp(8) })
         }
-        homeRoot?.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(row) }, LinearLayout.LayoutParams(-1,dp(325)))
+        homeRoot?.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled=false; clipChildren=false; clipToPadding=false; addView(row)
+        },LinearLayout.LayoutParams(-1,dp(320)))
     }
 
 
@@ -500,6 +589,39 @@ class MainActivity : Activity() {
         addView(TextView(this@MainActivity).apply{text=sub;textSize=16f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER},params(-2,-2,8))
         addView(first,params(600,62,22))
     }
+    private fun navButton(label:String, click:()->Unit)=Button(this).apply {
+        text=label; contentDescription=label; isAllCaps=false; textSize=16f
+        setTextColor(Color.LTGRAY); isFocusable=true; isClickable=true
+        setPadding(dp(16),0,dp(16),0)
+        background=GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius=dp(8).toFloat() }
+        setOnClickListener { click() }
+        setOnFocusChangeListener { v, focused ->
+            setTextColor(if(focused) Color.WHITE else Color.LTGRAY)
+            background=GradientDrawable().apply {
+                setColor(if(focused) Color.rgb(83,50,205) else Color.TRANSPARENT)
+                cornerRadius=dp(8).toFloat()
+            }
+            v.animate().scaleX(if(focused)1.06f else 1f).scaleY(if(focused)1.06f else 1f).setDuration(100).start()
+        }
+    }
+
+    private fun actionButton(label:String, primary:Boolean, click:()->Unit)=Button(this).apply {
+        text=label; contentDescription=label; isAllCaps=false; textSize=17f; typeface=Typeface.DEFAULT_BOLD
+        setTextColor(if(primary) Color.BLACK else Color.WHITE); isFocusable=true
+        background=GradientDrawable().apply {
+            setColor(if(primary) Color.WHITE else 0x99282830.toInt()); cornerRadius=dp(8).toFloat()
+        }
+        setOnClickListener { click() }
+        setOnFocusChangeListener { v, focused ->
+            background=GradientDrawable().apply {
+                setColor(if(focused) Color.rgb(126,87,255) else if(primary) Color.WHITE else 0x99282830.toInt())
+                cornerRadius=dp(8).toFloat()
+            }
+            setTextColor(if(focused || !primary) Color.WHITE else Color.BLACK)
+            v.animate().scaleX(if(focused)1.05f else 1f).scaleY(if(focused)1.05f else 1f).setDuration(100).start()
+        }
+    }
+
     private fun button(label:String, click:()->Unit)=Button(this).apply {
         text=label; contentDescription=label; isAllCaps=false; textSize=17f; setTextColor(Color.WHITE); isFocusable=true; minHeight=dp(48)
         backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205)); setOnClickListener{click()}
