@@ -127,8 +127,8 @@ class MainActivity : Activity() {
         val homeButton = navButton("Startseite") { showHome() }
         val moviesButton = navButton("Filme") { showLibrary("Filme","Movie") }
         val seriesButton = navButton("Serien") { showLibrary("Serien","Series") }
-        val animeButton = navButton("Anime") { showGenreLibrary("Anime","Series") }
-        val animeMoviesButton = navButton("Animefilme") { showGenreLibrary("Animefilme","Movie") }
+        val animeButton = navButton("Anime") { showMediaFolderLibrary("Anime","Series") }
+        val animeMoviesButton = navButton("Animefilme") { showMediaFolderLibrary("Animefilme","Movie") }
         val collectionsButton = navButton("Sammlungen") { showLibrary("Sammlungen","BoxSet") }
         listOf(homeButton,moviesButton,seriesButton,animeButton,animeMoviesButton,collectionsButton).forEach {
             nav.addView(it, LinearLayout.LayoutParams(-2,dp(48)).apply { marginEnd=dp(8) })
@@ -303,6 +303,32 @@ class MainActivity : Activity() {
         },LinearLayout.LayoutParams(-1,dp(320)))
     }
 
+
+    private fun showMediaFolderLibrary(title:String, type:String) {
+        rememberBack { showHome() }
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+        root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE) })
+        root.addView(ProgressBar(this))
+        setContentView(ScrollView(this).apply { addView(root) })
+        io.execute {
+            try {
+                val folders=items("/Users/$userId/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=CollectionFolder&Fields=Path")
+                val wanted=if(title=="Animefilme") listOf("animefilme","anime filme","anime movies") else listOf("anime")
+                val folder=folders.firstOrNull { f ->
+                    val name=f.optString("Name").trim().lowercase()
+                    wanted.any { name==it } || (title=="Animefilme" && name.contains("anime") && (name.contains("film") || name.contains("movie")))
+                }
+                val folderId=folder?.optString("Id").orEmpty()
+                val data=if(folderId.isBlank()) emptyList() else items("/Users/$userId/Items?ParentId=$folderId&Recursive=true&Limit=200&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    root.removeViewAt(1); homeRoot=root
+                    if(folderId.isBlank()) root.addView(TextView(this).apply { text="Der Jellyfin-Medienordner „$title“ wurde nicht gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    else if(data.isEmpty()) root.addView(TextView(this).apply { text="Im Medienordner „$title“ wurden keine passenden Inhalte gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    else addRow(title,data)
+                }
+            } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
+        }
+    }
 
     private fun showGenreLibrary(title:String, type:String) {
         rememberBack { showHome() }
