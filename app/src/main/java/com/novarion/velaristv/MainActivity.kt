@@ -122,7 +122,7 @@ class MainActivity : Activity() {
 
         val top=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL
-            setPadding(dp(34),dp(16),dp(34),dp(8))
+            setPadding(dp(52),dp(16),dp(44),dp(8))
             background=GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xE608080D.toInt(),0x9908080D.toInt(),0x0008080D)
@@ -294,7 +294,7 @@ class MainActivity : Activity() {
     private fun addContinueRow(data:List<JSONObject>) {
         if(data.isEmpty()) return
         homeRoot?.addView(sectionTitle("Weiterschauen"))
-        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(52),dp(8),dp(52),dp(22)); clipChildren=false }
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(68),dp(8),dp(60),dp(30)); clipChildren=false; clipToPadding=false }
         data.forEach { item ->
             val id=item.optString("Id"); if(id.isBlank()) return@forEach
             val ticks=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
@@ -316,18 +316,20 @@ class MainActivity : Activity() {
             },LinearLayout.LayoutParams(dp(310),dp(5)))
             row.addView(card,LinearLayout.LayoutParams(dp(322),dp(230)).apply{marginEnd=dp(12)})
         }
-        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(246)))
+        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(268)))
     }
 
     private fun addRankedRow(title:String,data:List<JSONObject>) {
         if(data.isEmpty()) return
         homeRoot?.addView(sectionTitle(title))
-        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(52),dp(8),dp(52),dp(22)); clipChildren=false }
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(68),dp(8),dp(60),dp(30)); clipChildren=false }
         data.take(10).forEachIndexed { index,item ->
             val wrap=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.BOTTOM; isFocusable=true; isClickable=true
                 setOnClickListener { if(item.optString("Type")=="Series") showSeries(item.optString("Id")) else showDetails(item.optString("Id")) }; applyCardFocus(this) }
             wrap.addView(TextView(this).apply { text="${index+1}"; textSize=68f; typeface=Typeface.DEFAULT_BOLD; setTextColor(0xFF2D2D35.toInt()); gravity=Gravity.BOTTOM },LinearLayout.LayoutParams(dp(58),dp(218)))
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+            img.clipToOutline=true
+            img.outlineProvider=object:android.view.ViewOutlineProvider(){override fun getOutline(v:View,o:android.graphics.Outline){o.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(12).toFloat())}}
             wrap.addView(img,LinearLayout.LayoutParams(dp(154),dp(218))); loadImage(img,item.optString("Id"),"Primary",380)
             row.addView(wrap,LinearLayout.LayoutParams(dp(220),dp(228)).apply{marginEnd=dp(4)})
         }
@@ -336,7 +338,7 @@ class MainActivity : Activity() {
 
     private fun sectionTitle(label:String)=TextView(this).apply {
         text=label; setTextColor(Color.WHITE); textSize=24f; typeface=Typeface.DEFAULT_BOLD
-        setPadding(dp(52),dp(18),0,dp(8))
+        setPadding(dp(68),dp(18),0,dp(8))
     }
 
     private fun applyCardFocus(v:View) {
@@ -365,7 +367,11 @@ class MainActivity : Activity() {
                 setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
                 applyCardFocus(this)
             }
-            val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+            val img=ImageView(this).apply {
+                scaleType=ImageView.ScaleType.CENTER_CROP
+                clipToOutline=true
+                outlineProvider=object:android.view.ViewOutlineProvider(){override fun getOutline(v:View,o:android.graphics.Outline){o.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(12).toFloat())}}
+            }
             card.addView(img,LinearLayout.LayoutParams(dp(176),dp(248)))
             loadImage(img,id,"Primary",420)
             card.setOnLongClickListener { showDetails(id); true }
@@ -379,7 +385,7 @@ class MainActivity : Activity() {
         }
         homeRoot?.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled=false; clipChildren=false; clipToPadding=false; addView(row)
-        },LinearLayout.LayoutParams(-1,dp(320)))
+        },LinearLayout.LayoutParams(-1,dp(334)))
     }
 
 
