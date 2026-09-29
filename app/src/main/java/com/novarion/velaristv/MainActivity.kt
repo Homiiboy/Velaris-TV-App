@@ -24,7 +24,11 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("velaris_tv", MODE_PRIVATE) }
     private val io = Executors.newFixedThreadPool(6)
-    private val imageCache = android.util.LruCache<String,android.graphics.Bitmap>(24 * 1024 * 1024)
+    private val imageCacheMaxKb = ((Runtime.getRuntime().maxMemory() / 1024L) / 8L).coerceIn(12L * 1024L, 48L * 1024L).toInt()
+    private val imageCache = object: android.util.LruCache<String,android.graphics.Bitmap>(imageCacheMaxKb) {
+        override fun sizeOf(key:String, value:android.graphics.Bitmap):Int = (value.byteCount / 1024).coerceAtLeast(1)
+    }
+    private val imageLoads = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private var server = ""
     private var token = ""
     private var userId = ""
@@ -47,6 +51,12 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() { destroyed = true; io.shutdownNow(); super.onDestroy() }
+
+    override fun onTrimMemory(level:Int) {
+        super.onTrimMemory(level)
+        if(level >= TRIM_MEMORY_BACKGROUND) imageCache.evictAll()
+        else if(level >= TRIM_MEMORY_RUNNING_LOW) imageCache.trimToSize(imageCacheMaxKb / 2)
+    }
 
     override fun onBackPressed() {
         if(backStack.isNotEmpty()) {
@@ -153,40 +163,40 @@ class MainActivity : Activity() {
     private fun loadHome() {
         io.execute {
             try {
-                val resume = items("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview,RunTimeTicks&MediaTypes=Video")
-                val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
-                val favorites = items("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
-                val recommended = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=CommunityRating,DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
-                val topTen = items("/Users/$userId/Items?Recursive=true&Limit=10&SortBy=CommunityRating&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
-                val action = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Action&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
-                val comedy = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Comedy&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
-                val sciFi = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Science%20Fiction&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
-                val replay = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
-                val watched = items("/Users/$userId/Items?Recursive=true&Limit=1&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
-                val becauseTitle = watched.firstOrNull()?.optString("Name").orEmpty()
-                val because = watched.firstOrNull()?.optString("Id")?.takeIf { it.isNotBlank() }?.let { watchedId ->
-                    runCatching { items("/Items/$watchedId/Similar?UserId=$userId&Limit=18&Fields=PrimaryImageAspectRatio,CommunityRating") }.getOrDefault(emptyList())
-                } ?: emptyList()
+                fun async(path:String)=java.util.concurrent.CompletableFuture.supplyAsync({ items(path) },io)
+                val resumeF=async("/Users/$userId/Items/Resume?Limit=12&Fields=PrimaryImageAspectRatio,Overview,RunTimeTicks&MediaTypes=Video")
+                val latestF=async("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
+                val favoritesF=async("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val recommendedF=async("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=CommunityRating,DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
+                val topTenF=async("/Users/$userId/Items?Recursive=true&Limit=10&SortBy=CommunityRating&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
+                val actionF=async("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Action&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val comedyF=async("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Comedy&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val sciFiF=async("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Science%20Fiction&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val replayF=async("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
+                val watchedF=async("/Users/$userId/Items?Recursive=true&Limit=1&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
+                val resume=resumeF.get(); val latest=latestF.get(); val favorites=favoritesF.get()
+                val recommended=recommendedF.get(); val topTen=topTenF.get(); val action=actionF.get()
+                val comedy=comedyF.get(); val sciFi=sciFiF.get(); val replay=replayF.get(); val watched=watchedF.get()
+                val becauseTitle=watched.firstOrNull()?.optString("Name").orEmpty()
+                val because=watched.firstOrNull()?.optString("Id")?.takeIf{it.isNotBlank()}?.let{watchedId->
+                    runCatching{items("/Items/$watchedId/Similar?UserId=$userId&Limit=18&Fields=PrimaryImageAspectRatio,CommunityRating")}.getOrDefault(emptyList())
+                }?:emptyList()
                 runOnUiThread {
-                    homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
-                    addHeroCarousel((latest + recommended).distinctBy { it.optString("Id") }.take(5))
+                    homeRoot?.let { if(it.childCount>2) it.removeViews(2,it.childCount-2) }
+                    addHeroCarousel((latest+recommended).distinctBy{it.optString("Id")}.take(5))
                     addContinueRow(resume)
-                    if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast", because)
-                    addRow("Meine Liste", favorites)
-                    addRow("Für dich", recommended)
-                    addRankedRow("Top 10 in deiner Mediathek", topTen)
-                    addRow("Action", action)
-                    addRow("Komödien", comedy)
-                    addRow("Science-Fiction", sciFi)
-                    addRow("Noch einmal ansehen", replay)
-                    addRow("Kürzlich hinzugefügt", latest)
+                    if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast",because)
+                    addRow("Meine Liste",favorites); addRow("Für dich",recommended)
+                    addRankedRow("Top 10 in deiner Mediathek",topTen)
+                    addRow("Action",action); addRow("Komödien",comedy); addRow("Science-Fiction",sciFi)
+                    addRow("Noch einmal ansehen",replay); addRow("Kürzlich hinzugefügt",latest)
                 }
-            } catch(e: Exception) { runOnUiThread {
+            } catch(e:Exception) { runOnUiThread {
                 val root=homeRoot ?: return@runOnUiThread
                 root.let { if(it.childCount>2) it.removeViews(2,it.childCount-2) }
-                root.addView(TextView(this).apply { text="Velaris konnte den Server gerade nicht erreichen."; textSize=20f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; setPadding(0,dp(32),0,dp(18)) })
-                root.addView(button("Erneut versuchen") { loadHome() },params(260,60,8))
-            } }
+                root.addView(TextView(this).apply{text="Velaris konnte den Server gerade nicht erreichen.";textSize=20f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;setPadding(0,dp(32),0,dp(18))})
+                root.addView(button("Erneut versuchen"){loadHome()},params(260,60,8))
+            }}
         }
     }
 
@@ -791,17 +801,28 @@ class MainActivity : Activity() {
                 outline.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(10).toFloat())
             }
         }
+        val disk=java.io.File(cacheDir,"img_"+cacheKey.hashCode().toUInt().toString(16)+".jpg")
+        if(disk.exists()) {
+            val bmp=runCatching{android.graphics.BitmapFactory.decodeFile(disk.absolutePath)}.getOrNull()
+            if(bmp!=null) { imageCache.put(cacheKey,bmp); view.setImageBitmap(bmp); return } else disk.delete()
+        }
+        if(!imageLoads.add(cacheKey)) return
         io.execute {
             try {
-                val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=90").openConnection() as HttpURLConnection
-                conn.setRequestProperty("X-Emby-Token",token); conn.connectTimeout=6000; conn.readTimeout=8000
+                val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=82").openConnection() as HttpURLConnection
+                conn.setRequestProperty("X-Emby-Token",token); conn.connectTimeout=4500; conn.readTimeout=7000
                 try {
                     if(conn.responseCode in 200..299) {
-                        val bmp=conn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
-                        if(bmp != null && !destroyed) { imageCache.put(cacheKey,bmp); runOnUiThread { if(!isFinishing && !isDestroyed) view.setImageBitmap(bmp) } }
+                        val bytes=conn.inputStream.use{it.readBytes()}
+                        val bmp=android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+                        if(bmp!=null && !destroyed) {
+                            imageCache.put(cacheKey,bmp)
+                            runCatching{disk.writeBytes(bytes)}
+                            runOnUiThread{if(!isFinishing&&!isDestroyed)view.setImageBitmap(bmp)}
+                        }
                     }
                 } finally { conn.disconnect() }
-            } catch(_:Exception){}
+            } catch(_:Exception) {} finally { imageLoads.remove(cacheKey) }
         }
     }
 
