@@ -640,17 +640,24 @@ class MainActivity : Activity() {
     }
     private fun navButton(label:String, click:()->Unit)=Button(this).apply {
         text=label; contentDescription=label; isAllCaps=false; textSize=16f
-        setTextColor(Color.LTGRAY); isFocusable=true; isClickable=true
+        setTextColor(Color.WHITE); isFocusable=true; isClickable=true
         setPadding(dp(16),0,dp(16),0)
-        background=GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius=dp(8).toFloat() }
+        background=GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius=dp(7).toFloat()
+        }
+        stateListAnimator=null
+        elevation=0f
         setOnClickListener { click() }
         setOnFocusChangeListener { v, focused ->
-            setTextColor(if(focused) Color.WHITE else Color.LTGRAY)
             background=GradientDrawable().apply {
-                setColor(if(focused) Color.rgb(83,50,205) else Color.TRANSPARENT)
-                cornerRadius=dp(8).toFloat()
+                setColor(if(focused) 0x663F3F46 else Color.TRANSPARENT)
+                cornerRadius=dp(7).toFloat()
             }
-            v.animate().scaleX(if(focused)1.06f else 1f).scaleY(if(focused)1.06f else 1f).setDuration(100).start()
+            v.animate()
+                .scaleX(if(focused)1.03f else 1f)
+                .scaleY(if(focused)1.03f else 1f)
+                .setDuration(110).start()
         }
     }
 
