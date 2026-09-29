@@ -630,34 +630,81 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun readProfiles():org.json.JSONArray {
+        val stored=prefs.getString("velaris_profiles","").orEmpty()
+        if(stored.isNotBlank()) return runCatching{org.json.JSONArray(stored)}.getOrElse{org.json.JSONArray()}
+        val seed=org.json.JSONArray().apply {
+            put(JSONObject().put("name",prefs.getString("active_profile_name","Sandro") ?: "Sandro")
+                .put("avatar",prefs.getInt("active_profile_avatar",0)))
+        }
+        prefs.edit().putString("velaris_profiles",seed.toString()).apply()
+        return seed
+    }
+
     private fun showProfiles(startup:Boolean=false) {
         if(!startup) rememberBack { showHome() }
-        val stored=prefs.getString("velaris_profiles","").orEmpty()
-        val profiles=if(stored.isBlank()) org.json.JSONArray().apply {
-            put(JSONObject().put("name",prefs.getString("active_profile_name","Sandro")?:"Sandro").put("avatar",0))
-        } else runCatching{org.json.JSONArray(stored)}.getOrElse{org.json.JSONArray()}
-        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(50),dp(42),dp(50),dp(36));setBackgroundColor(Color.rgb(8,8,13))}
-        root.addView(TextView(this).apply{text="Wer schaut gerade?";textSize=38f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER},params(-1,-2,0))
-        val grid=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(0,dp(28),0,0)}
+        val profiles=readProfiles()
+        val root=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER
+            setPadding(dp(70),dp(34),dp(70),dp(34));setBackgroundColor(Color.rgb(8,8,13))
+        }
+        root.addView(TextView(this).apply{
+            text="Wer schaut gerade?";textSize=40f;setTextColor(Color.WHITE)
+            typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER
+        },params(-1,-2,0))
+        root.addView(TextView(this).apply{
+            text="Wähle dein Profil";textSize=17f;setTextColor(0xFF9B9BA4.toInt());gravity=Gravity.CENTER
+        },params(-1,-2,8))
+
+        val grid=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(0,dp(26),0,0)}
         var row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        fun avatarColor(index:Int)=intArrayOf(0xFF6546D7.toInt(),0xFF285B8F.toInt(),0xFF8A3154.toInt(),0xFF28705C.toInt(),0xFF8A5A25.toInt(),0xFF4B4F9A.toInt(),0xFF6C3B86.toInt(),0xFF2F6D7A.toInt(),0xFF7B3E35.toInt(),0xFF495057.toInt())[index%10]
+        fun addTile(tile:View,index:Int){
+            if(index>0 && index%5==0){grid.addView(row);row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}}
+            row.addView(tile,LinearLayout.LayoutParams(dp(180),dp(205)).apply{marginEnd=dp(12)})
+        }
         for(i in 0 until profiles.length()) {
-            if(i>0 && i%5==0){grid.addView(row);row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}}
-            val p=profiles.getJSONObject(i);val name=p.optString("name","Profil");val av=p.optInt("avatar",i)
-            val tile=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this)
-                setOnClickListener{prefs.edit().putString("active_profile_name",name).putInt("active_profile_avatar",av).apply();toast("Profil $name aktiv");showHome()}}
-            val face=avatarFace(av,name.take(1).uppercase())
-            tile.addView(face,LinearLayout.LayoutParams(dp(132),dp(132)))
-            tile.addView(TextView(this).apply{text=name;textSize=16f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;maxLines=1},LinearLayout.LayoutParams(dp(150),dp(42)))
-            row.addView(tile,LinearLayout.LayoutParams(dp(166),dp(190)).apply{marginEnd=dp(10)})
+            val p=profiles.optJSONObject(i) ?: continue
+            val name=p.optString("name","Profil");val av=p.optInt("avatar",i)
+            val tile=LinearLayout(this).apply{
+                orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true
+                setPadding(dp(8),dp(8),dp(8),dp(4))
+                setOnFocusChangeListener{v,focused->
+                    v.animate().scaleX(if(focused)1.08f else 1f).scaleY(if(focused)1.08f else 1f).setDuration(120).start()
+                    background=GradientDrawable().apply{
+                        setColor(if(focused)0xFF222229.toInt() else Color.TRANSPARENT)
+                        cornerRadius=dp(12).toFloat()
+                        if(focused)setStroke(dp(2),Color.WHITE)
+                    }
+                }
+                setOnClickListener{
+                    prefs.edit().putString("active_profile_name",name).putInt("active_profile_avatar",av).apply()
+                    showHome()
+                }
+            }
+            tile.addView(avatarFace(av,name),LinearLayout.LayoutParams(dp(142),dp(142)))
+            tile.addView(TextView(this).apply{
+                text=name;textSize=17f;setTextColor(0xFFBDBDC4.toInt());gravity=Gravity.CENTER;maxLines=1
+            },LinearLayout.LayoutParams(dp(164),dp(42)))
+            addTile(tile,i)
         }
         if(profiles.length()<10){
-            val add=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this);setOnClickListener{showCreateProfile()}}
-            add.addView(TextView(this).apply{text="+";textSize=54f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;background=GradientDrawable().apply{setColor(0xFF25252C.toInt());cornerRadius=dp(18).toFloat()}},LinearLayout.LayoutParams(dp(132),dp(132)))
-            add.addView(TextView(this).apply{text="Profil hinzufügen";textSize=14f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(150),dp(42)))
-            row.addView(add,LinearLayout.LayoutParams(dp(166),dp(190)))
+            val add=LinearLayout(this).apply{
+                orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true
+                setPadding(dp(8),dp(8),dp(8),dp(4));setOnClickListener{showCreateProfile()}
+                setOnFocusChangeListener{v,focused->
+                    v.animate().scaleX(if(focused)1.08f else 1f).scaleY(if(focused)1.08f else 1f).setDuration(120).start()
+                    background=GradientDrawable().apply{setColor(if(focused)0xFF222229.toInt() else Color.TRANSPARENT);cornerRadius=dp(12).toFloat();if(focused)setStroke(dp(2),Color.WHITE)}
+                }
+            }
+            add.addView(TextView(this).apply{
+                text="+";textSize=54f;setTextColor(0xFFBDBDC4.toInt());gravity=Gravity.CENTER
+                background=GradientDrawable().apply{setColor(0xFF24242A.toInt());cornerRadius=dp(14).toFloat()}
+            },LinearLayout.LayoutParams(dp(142),dp(142)))
+            add.addView(TextView(this).apply{text="Profil hinzufügen";textSize=15f;setTextColor(0xFFBDBDC4.toInt());gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(164),dp(42)))
+            addTile(add,profiles.length())
         }
         grid.addView(row);root.addView(grid);setContentView(root)
+        root.post{root.focusSearch(View.FOCUS_FORWARD)?.requestFocus()}
     }
 
     private fun avatarFace(index:Int,initial:String):View {
@@ -693,8 +740,9 @@ class MainActivity : Activity() {
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(avatars)},params(-1,86,12))
         root.addView(actionButton("Profil erstellen",true){
             val n=name.text.toString().trim();if(n.isBlank())return@actionButton toast("Profilname eingeben")
-            val arr=runCatching{org.json.JSONArray(prefs.getString("velaris_profiles","").orEmpty())}.getOrElse{org.json.JSONArray()}
+            val arr=readProfiles()
             if(arr.length()>=10)return@actionButton toast("Maximal 10 Profile")
+            if((0 until arr.length()).any{arr.optJSONObject(it)?.optString("name","")?.equals(n,true)==true})return@actionButton toast("Profilname existiert bereits")
             arr.put(JSONObject().put("name",n).put("avatar",selected));prefs.edit().putString("velaris_profiles",arr.toString()).apply();showProfiles()
         },params(230,58,24))
         setContentView(root);name.requestFocus()
