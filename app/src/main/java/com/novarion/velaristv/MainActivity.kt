@@ -459,16 +459,23 @@ class MainActivity : Activity() {
                 val series=request("/Users/$userId/Items/$seriesId")
                 val seasons=items("/Shows/$seriesId/Seasons?UserId=$userId&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
-                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
-                    root.addView(TextView(this).apply { text=series.optString("Name"); textSize=34f; setTextColor(Color.WHITE) })
-                    root.addView(TextView(this).apply { text=series.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); maxLines=4 },params(-1,-2,12))
-                    val favorite=series.optJSONObject("UserData")?.optBoolean("IsFavorite",false) ?: false
-                    root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(seriesId,!favorite) { showSeries(seriesId) } },params(260,56,12))
-                    seasons.forEach { season ->
-                        root.addView(button(season.optString("Name","Staffel")) { showSeason(seriesId,season.optString("Id")) },params(360,58,12))
-                    }
-                    root.addView(button("Zurück") { showHome() },params(220,56,18))
-                    setContentView(ScrollView(this).apply { addView(root) })
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(8,8,13)) }
+                    val hero=FrameLayout(this)
+                    val bg=ImageView(this).apply{scaleType=ImageView.ScaleType.CENTER_CROP}; hero.addView(bg,FrameLayout.LayoutParams(-1,dp(390))); loadImage(bg,seriesId,"Backdrop",1600)
+                    hero.addView(View(this).apply{background=GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,intArrayOf(0xF708080D.toInt(),0xA808080D.toInt(),0x2208080D))},FrameLayout.LayoutParams(-1,-1))
+                    val info=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.BOTTOM;setPadding(dp(54),dp(80),dp(54),dp(38))}
+                    info.addView(TextView(this).apply{text=series.optString("Name");textSize=40f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD})
+                    info.addView(TextView(this).apply{text=series.optString("Overview");textSize=16f;setTextColor(Color.LTGRAY);maxLines=3;setPadding(0,dp(10),0,0)},LinearLayout.LayoutParams(dp(720),-2))
+                    val favorite=series.optJSONObject("UserData")?.optBoolean("IsFavorite",false)?:false
+                    val acts=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(16),0,0)}
+                    acts.addView(actionButton(if(favorite)"✓  Meine Liste" else "+  Meine Liste",false){setFavorite(seriesId,!favorite){showSeries(seriesId)}},LinearLayout.LayoutParams(dp(220),dp(56)).apply{marginEnd=dp(10)})
+                    acts.addView(actionButton("Zufällige Folge",false){playRandomEpisode(seriesId)},LinearLayout.LayoutParams(dp(200),dp(56)))
+                    info.addView(acts); hero.addView(info,FrameLayout.LayoutParams(-1,-1)); root.addView(hero,LinearLayout.LayoutParams(-1,dp(390)))
+                    root.addView(sectionTitle("Staffeln"))
+                    val seasonRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(dp(52),dp(8),dp(52),dp(22))}
+                    seasons.forEach { season -> seasonRow.addView(actionButton(season.optString("Name","Staffel"),false){showSeason(seriesId,season.optString("Id"))},LinearLayout.LayoutParams(dp(180),dp(56)).apply{marginEnd=dp(10)}) }
+                    root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(seasonRow)})
+                    setContentView(ScrollView(this).apply{isVerticalScrollBarEnabled=false;addView(root)})
                 }
             } catch(e:Exception){ runOnUiThread{toast("Serie konnte nicht geladen werden")} }
         }
@@ -488,12 +495,14 @@ class MainActivity : Activity() {
                         val number=ep.optInt("IndexNumber",0)
                         val name=ep.optString("Name")
                         val nextId=episodes.getOrNull(episodes.indexOf(ep)+1)?.optString("Id").orEmpty()
-                        val card=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; isFocusable=true; isClickable=true; setPadding(dp(8),dp(8),dp(8),dp(8)); setOnClickListener { startEpisode(eid,ticks,nextId) }; setOnFocusChangeListener { v,f -> v.animate().scaleX(if(f)1.025f else 1f).scaleY(if(f)1.025f else 1f).setDuration(120).start() } }
+                        val card=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; isFocusable=true; isClickable=true; setPadding(dp(8),dp(8),dp(8),dp(8)); setOnClickListener { startEpisode(eid,ticks,nextId) }; applyCardFocus(this) }
                         val thumb=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
                         card.addView(thumb,LinearLayout.LayoutParams(dp(250),dp(140))); loadImage(thumb,eid,"Primary",500)
                         val info=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(18),0,0,0) }
-                        info.addView(TextView(this).apply { text=(if(number>0) "$number. " else "")+name; textSize=20f; setTextColor(Color.WHITE) })
-                        info.addView(TextView(this).apply { text=ep.optString("Overview"); textSize=14f; setTextColor(Color.LTGRAY); maxLines=3 },params(-1,-2,6))
+                        info.addView(TextView(this).apply { text=(if(number>0) "$number. " else "")+name; textSize=20f; setTextColor(Color.WHITE); typeface=Typeface.DEFAULT_BOLD })
+                        val runtime=ep.optLong("RunTimeTicks",0L)/600_000_000L
+                        if(runtime>0) info.addView(TextView(this).apply { text="$runtime Min."; textSize=13f; setTextColor(Color.GRAY) },params(-1,-2,3))
+                        info.addView(TextView(this).apply { text=ep.optString("Overview"); textSize=14f; setTextColor(Color.LTGRAY); maxLines=2 },params(-1,-2,5))
                         card.addView(info,LinearLayout.LayoutParams(0,dp(140),1f))
                         root.addView(card,params(-1,156,8))
                     }
@@ -569,19 +578,19 @@ class MainActivity : Activity() {
             try {
                 val users=request("/Users","GET",null,true).optJSONArray("array")
                 runOnUiThread {
-                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(72),dp(36),dp(72),dp(36)); setBackgroundColor(Color.rgb(8,8,13)) }
-                    root.addView(TextView(this).apply { text="Profile"; textSize=32f; setTextColor(Color.WHITE); gravity=Gravity.CENTER },params(-1,-2,0))
-                    if(users==null || users.length()==0) root.addView(TextView(this).apply { text="Keine weiteren Profile verfügbar."; setTextColor(Color.LTGRAY); textSize=17f },params(-1,-2,18))
-                    else for(i in 0 until users.length()) {
+                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(72),dp(50),dp(72),dp(50)); setBackgroundColor(Color.rgb(8,8,13)) }
+                    root.addView(TextView(this).apply{text="Wer schaut gerade?";textSize=38f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER},params(-1,-2,0))
+                    val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(0,dp(34),0,0)}
+                    if(users!=null) for(i in 0 until users.length()) {
                         val u=users.getJSONObject(i); val uid=u.optString("Id"); val name=u.optString("Name","Profil")
-                        root.addView(button(if(uid==userId) "✓ $name" else name) {
-                            if(uid==userId) showHome() else {
-                                token=""; userId=""; prefs.edit().remove("access_token").remove("user_id").apply()
-                                toast("Bitte als $name anmelden"); showLogin()
-                            }
-                        },params(320,60,12))
+                        val tile=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this)
+                            setOnClickListener{if(uid==userId)showHome()else{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();toast("Bitte als $name anmelden");showLogin()}}}
+                        val avatar=ImageView(this).apply{scaleType=ImageView.ScaleType.CENTER_CROP;setBackgroundColor(0xFF2A2A32.toInt())}
+                        tile.addView(avatar,LinearLayout.LayoutParams(dp(150),dp(150))); loadImage(avatar,uid,"Primary",300)
+                        tile.addView(TextView(this).apply{text=if(uid==userId)"✓ $name" else name;textSize=17f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;setPadding(0,dp(10),0,0)},LinearLayout.LayoutParams(dp(170),dp(42)))
+                        row.addView(tile,LinearLayout.LayoutParams(dp(184),dp(210)).apply{marginEnd=dp(18)})
                     }
-                    root.addView(button("Zurück") { showHome() },params(220,56,18))
+                    root.addView(row)
                     setContentView(root)
                 }
             } catch(e:Exception) { runOnUiThread { toast("Profile konnten nicht geladen werden") } }
