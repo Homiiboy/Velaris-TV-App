@@ -2,6 +2,8 @@ package com.novarion.velaristv
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -45,6 +47,9 @@ class PlayerActivity : Activity() {
     private var skipIntroButton: Button? = null
     private var activeSegment: MediaSegment? = null
     private var statsText: TextView? = null
+    private var titleText: TextView? = null
+    private var nextOverlay: TextView? = null
+    private var autoNextEnabled = true
     private var lastPlaybackLabel = "Auto"
     private var lastMediaInfo = ""
     private var playerViewRef: PlayerView? = null
@@ -66,6 +71,7 @@ class PlayerActivity : Activity() {
         userId = intent.getStringExtra("userId").orEmpty()
         startTicks = intent.getLongExtra("startTicks", 0L)
         nextItemId = intent.getStringExtra("nextItemId").orEmpty()
+        autoNextEnabled=getSharedPreferences("velaris_tv",MODE_PRIVATE).getBoolean("auto_next",true)
         if (server.isBlank() || token.isBlank() || itemId.isBlank()) {
             android.widget.Toast.makeText(this, "Ungültige Wiedergabeparameter", android.widget.Toast.LENGTH_LONG).show()
             finish()
@@ -83,7 +89,7 @@ class PlayerActivity : Activity() {
         playerViewRef=playerView
         root.addView(playerView, FrameLayout.LayoutParams(-1, -1))
         root.addView(TextView(this).apply {
-            text = "VELARIS"; textSize = 16f; setTextColor(0x99FFFFFF.toInt())
+            text = "VELARIS"; textSize = 15f; setTextColor(0x88FFFFFF.toInt()); typeface=Typeface.DEFAULT_BOLD
             setPadding(28, 18, 0, 0)
         })
         skipIntroButton = Button(this).apply {
@@ -92,7 +98,9 @@ class PlayerActivity : Activity() {
             isAllCaps = false
             textSize = 17f
             setTextColor(Color.WHITE)
-            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(83,50,205))
+            background=GradientDrawable().apply{setColor(0xDDFFFFFF.toInt());cornerRadius=10f}
+            setTextColor(Color.BLACK)
+            stateListAnimator=null
             visibility = View.GONE
             setOnClickListener {
                 val segment=activeSegment
@@ -108,6 +116,11 @@ class PlayerActivity : Activity() {
         })
         statsText=TextView(this).apply { textSize=14f; setTextColor(Color.WHITE); setBackgroundColor(0xAA000000.toInt()); setPadding(18,12,18,12); visibility=View.GONE }
         root.addView(statsText,FrameLayout.LayoutParams(-2,-2,android.view.Gravity.START or android.view.Gravity.TOP).apply { marginStart=28; topMargin=54 })
+        titleText=TextView(this).apply{textSize=18f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;setBackgroundColor(0x77000000);setPadding(20,12,20,12)}
+        root.addView(titleText,FrameLayout.LayoutParams(-2,-2,android.view.Gravity.START or android.view.Gravity.BOTTOM).apply{marginStart=34;bottomMargin=42})
+        nextOverlay=TextView(this).apply{text="Nächste Folge";textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(0xAA202026.toInt());setPadding(18,12,18,12);visibility=View.GONE}
+        root.addView(nextOverlay,FrameLayout.LayoutParams(-2,-2,android.view.Gravity.END or android.view.Gravity.BOTTOM).apply{marginEnd=42;bottomMargin=140})
+        loadPlayerTitle(itemId)
         setContentView(root)
 
         val exo = ExoPlayer.Builder(this).build()
@@ -121,7 +134,7 @@ class PlayerActivity : Activity() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     reportStoppedOnce()
-                    if(nextItemId.isNotBlank()) {
+                    if(nextItemId.isNotBlank() && autoNextEnabled) {
                         itemId=nextItemId; nextItemId=""; stoppedReported=false; sessionStarted=false
                         loadFollowingEpisodeAndPlay(exo,itemId)
                     } else finish()
@@ -154,7 +167,7 @@ class PlayerActivity : Activity() {
                 } finally { c.disconnect() }
             } catch(_:Exception) {}
             nextItemId=following
-            runOnUiThread { if(!isFinishing && !isDestroyed) preparePlayback(exo,id,0L) }
+            runOnUiThread { if(!isFinishing && !isDestroyed) preparePlayback(exo,id,0L); loadPlayerTitle(id) }
         }
     }
 
@@ -171,6 +184,23 @@ class PlayerActivity : Activity() {
                 if(resumeTicks > 0) exo.seekTo(resumeTicks / 10_000L)
                 exo.playWhenReady=true
             }
+        }
+    }
+
+    private fun loadPlayerTitle(id:String) {
+        io.execute {
+            try {
+                val c=URL("$server/Users/$userId/Items/$id").openConnection() as HttpURLConnection
+                try {
+                    c.setRequestProperty("Authorization", """MediaBrowser Client="Velaris TV", Device="Android TV", DeviceId="velaris-tv", Version="0.7.0", Token="$token"""")
+                    if(c.responseCode in 200..299) {
+                        val x=JSONObject(c.inputStream.bufferedReader().use{it.readText()})
+                        val name=x.optString("Name");val series=x.optString("SeriesName");val season=x.optInt("ParentIndexNumber",0);val ep=x.optInt("IndexNumber",0)
+                        val label=if(series.isNotBlank()) "$series  •  S$season:E$ep  •  $name" else name
+                        runOnUiThread{titleText?.text=label}
+                    }
+                } finally {c.disconnect()}
+            } catch(_:Exception){}
         }
     }
 
