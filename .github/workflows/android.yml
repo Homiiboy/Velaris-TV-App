@@ -1,4 +1,5 @@
 name: Android TV CI
+# Build trigger: latest APK after Performance Pass 2 and branding update
 
 on:
   push:
