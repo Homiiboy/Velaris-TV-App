@@ -705,7 +705,7 @@ class MainActivity : Activity() {
             addTile(add,profiles.length())
         }
         grid.addView(row);root.addView(grid);setContentView(root)
-        root.post{root.focusSearch(View.FOCUS_FORWARD)?.requestFocus()}
+        root.post{root.focusSearch(View.FOCUS_DOWN)?.requestFocus()}
     }
 
     private fun avatarFace(index:Int,initial:String):View {
