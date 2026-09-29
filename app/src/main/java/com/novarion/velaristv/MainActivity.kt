@@ -710,10 +710,8 @@ class MainActivity : Activity() {
 
     private fun avatarFace(index:Int,initial:String):View {
         val avatars=intArrayOf(
-            R.drawable.avatar_01,R.drawable.avatar_02,R.drawable.avatar_03,
-            R.drawable.avatar_04,R.drawable.avatar_05,R.drawable.avatar_06,
-            R.drawable.avatar_07,R.drawable.avatar_08,R.drawable.avatar_09,
-            R.drawable.avatar_10,R.drawable.avatar_11
+            R.drawable.avatar_seal_white,
+            R.drawable.avatar_seal_gray
         )
         return ImageView(this).apply {
             scaleType=ImageView.ScaleType.CENTER_CROP
@@ -736,7 +734,7 @@ class MainActivity : Activity() {
         root.addView(TextView(this).apply{text="Avatar auswählen";textSize=18f;setTextColor(Color.LTGRAY)},params(-2,-2,18))
         val avatars=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         var selected=0
-        val colors=IntArray(11){it}
+        val colors=IntArray(2){it}
         colors.forEachIndexed{i,_->avatars.addView(avatarFace(i,"").apply{isFocusable=true;isClickable=true;applyCardFocus(this);setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(82),dp(82)).apply{marginEnd=dp(10)})}
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(avatars)},params(-1,86,12))
         root.addView(actionButton("Profil erstellen",true){
