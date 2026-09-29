@@ -106,50 +106,43 @@ class MainActivity : Activity() {
     private fun showHome() {
         if(!suppressHistory) backStack.clear()
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val content = LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(8,8,13))
-            setPadding(0,0,0,dp(28))
-            clipToPadding = false
-        }
-        homeRoot = root
-
-        // Streaming-style navigation: deliberately quiet; purple is reserved for focus/actions.
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(52),dp(20),dp(52),dp(10))
-        }
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val homeButton = navButton("Startseite") { showHome() }
-        val moviesButton = navButton("Filme") { showLibrary("Filme","Movie") }
-        val seriesButton = navButton("Serien") { showLibrary("Serien","Series") }
-        val animeButton = navButton("Anime") { showMediaFolderLibrary("Anime","Series") }
-        val animeMoviesButton = navButton("Animefilme") { showMediaFolderLibrary("Animefilme","Movie") }
-        val collectionsButton = navButton("Sammlungen") { showLibrary("Sammlungen","BoxSet") }
-        listOf(homeButton,moviesButton,seriesButton,animeButton,animeMoviesButton,collectionsButton).forEach {
-            nav.addView(it, LinearLayout.LayoutParams(-2,dp(48)).apply { marginEnd=dp(8) })
-        }
-        top.addView(nav, LinearLayout.LayoutParams(0,dp(52),1f))
-        val search = navButton("⌕") { showSearch() }
-        val profile = navButton("Profil") { showProfiles() }
-        val settings = navButton("⚙") { showSettingsDialog() }
-        top.addView(search, LinearLayout.LayoutParams(dp(64),dp(48)).apply { marginEnd=dp(8) })
-        top.addView(profile, LinearLayout.LayoutParams(dp(96),dp(48)).apply { marginEnd=dp(8) })
-        top.addView(settings, LinearLayout.LayoutParams(dp(64),dp(48)))
-        root.addView(top, LinearLayout.LayoutParams(-1,dp(82)))
-
-        root.addView(ProgressBar(this).apply { isIndeterminate=true },
-            LinearLayout.LayoutParams(-1,dp(5)))
-
-        setContentView(ScrollView(this).apply {
-            isVerticalScrollBarEnabled=false
+            setPadding(0,0,0,dp(30))
             clipToPadding=false
-            addView(root)
-        })
+        }
+        homeRoot=content
+
+        val scroll=ScrollView(this).apply {
+            isVerticalScrollBarEnabled=false; clipToPadding=false; addView(content)
+        }
+        val screen=FrameLayout(this).apply { setBackgroundColor(Color.rgb(8,8,13)) }
+        screen.addView(scroll,FrameLayout.LayoutParams(-1,-1))
+
+        val top=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL
+            setPadding(dp(48),dp(16),dp(48),dp(8))
+            background=GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xE608080D.toInt(),0x9908080D.toInt(),0x0008080D)
+            )
+        }
+        val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+        listOf(
+            navButton("Startseite"){showHome()},
+            navButton("Filme"){showLibrary("Filme","Movie")},
+            navButton("Serien"){showLibrary("Serien","Series")},
+            navButton("Anime"){showMediaFolderLibrary("Anime","Series")},
+            navButton("Animefilme"){showMediaFolderLibrary("Animefilme","Movie")},
+            navButton("Sammlungen"){showLibrary("Sammlungen","BoxSet")}
+        ).forEach { nav.addView(it,LinearLayout.LayoutParams(-2,dp(46)).apply{marginEnd=dp(6)}) }
+        top.addView(nav,LinearLayout.LayoutParams(0,dp(50),1f))
+        top.addView(navButton("⌕"){showSearch()},LinearLayout.LayoutParams(dp(60),dp(46)).apply{marginEnd=dp(6)})
+        top.addView(navButton("Profil"){showProfiles()},LinearLayout.LayoutParams(dp(92),dp(46)).apply{marginEnd=dp(6)})
+        top.addView(navButton("⚙"){showSettingsDialog()},LinearLayout.LayoutParams(dp(60),dp(46)))
+        screen.addView(top,FrameLayout.LayoutParams(-1,dp(82),Gravity.TOP))
+        setContentView(screen)
         loadHome()
     }
 
@@ -160,6 +153,9 @@ class MainActivity : Activity() {
                 val latest = items("/Users/$userId/Items/Latest?Limit=18&Fields=PrimaryImageAspectRatio,Overview&IncludeItemTypes=Movie,Series")
                 val favorites = items("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
                 val recommended = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=CommunityRating,DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
+                val topTen = items("/Users/$userId/Items?Recursive=true&Limit=10&SortBy=CommunityRating&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
+                val action = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Action&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val comedy = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Comedy&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
                 val watched = items("/Users/$userId/Items?Recursive=true&Limit=1&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
                 val becauseTitle = watched.firstOrNull()?.optString("Name").orEmpty()
                 val because = watched.firstOrNull()?.optString("Id")?.takeIf { it.isNotBlank() }?.let { watchedId ->
@@ -168,10 +164,13 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
-                    addRow("Weiterschauen", resume)
+                    addContinueRow(resume)
                     if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast", because)
                     addRow("Meine Liste", favorites)
                     addRow("Für dich", recommended)
+                    addRankedRow("Top 10 in deiner Mediathek", topTen)
+                    addRow("Action", action)
+                    addRow("Komödien", comedy)
                     addRow("Kürzlich hinzugefügt", latest)
                 }
             } catch(e: Exception) { runOnUiThread {
@@ -250,12 +249,61 @@ class MainActivity : Activity() {
         homeRoot?.addView(hero,LinearLayout.LayoutParams(-1,dp(480)).apply { bottomMargin=dp(8) })
     }
 
+    private fun addContinueRow(data:List<JSONObject>) {
+        if(data.isEmpty()) return
+        homeRoot?.addView(sectionTitle("Weiterschauen"))
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(52),dp(8),dp(52),dp(22)); clipChildren=false }
+        data.forEach { item ->
+            val id=item.optString("Id"); if(id.isBlank()) return@forEach
+            val ticks=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
+            val total=item.optLong("RunTimeTicks",0L)
+            val card=LinearLayout(this).apply {
+                orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
+                setOnClickListener { playNative(id,ticks) }; applyCardFocus(this)
+            }
+            val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+            card.addView(img,LinearLayout.LayoutParams(dp(310),dp(174))); loadImage(img,id,"Backdrop",620)
+            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1; setPadding(dp(4),dp(7),0,0) },LinearLayout.LayoutParams(dp(310),dp(34)))
+            if(ticks>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
+                max=1000; progress=((ticks.toDouble()/total)*1000).toInt().coerceIn(0,1000)
+                progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(126,87,255))
+            },LinearLayout.LayoutParams(dp(310),dp(5)))
+            row.addView(card,LinearLayout.LayoutParams(dp(322),dp(230)).apply{marginEnd=dp(12)})
+        }
+        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(246)))
+    }
+
+    private fun addRankedRow(title:String,data:List<JSONObject>) {
+        if(data.isEmpty()) return
+        homeRoot?.addView(sectionTitle(title))
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(52),dp(8),dp(52),dp(22)); clipChildren=false }
+        data.take(10).forEachIndexed { index,item ->
+            val wrap=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.BOTTOM; isFocusable=true; isClickable=true
+                setOnClickListener { if(item.optString("Type")=="Series") showSeries(item.optString("Id")) else showDetails(item.optString("Id")) }; applyCardFocus(this) }
+            wrap.addView(TextView(this).apply { text="${index+1}"; textSize=82f; typeface=Typeface.DEFAULT_BOLD; setTextColor(0xFF2D2D35.toInt()); gravity=Gravity.BOTTOM },LinearLayout.LayoutParams(dp(72),dp(250)))
+            val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
+            wrap.addView(img,LinearLayout.LayoutParams(dp(176),dp(248))); loadImage(img,item.optString("Id"),"Primary",420)
+            row.addView(wrap,LinearLayout.LayoutParams(dp(260),dp(260)).apply{marginEnd=dp(8)})
+        }
+        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(278)))
+    }
+
+    private fun sectionTitle(label:String)=TextView(this).apply {
+        text=label; setTextColor(Color.WHITE); textSize=24f; typeface=Typeface.DEFAULT_BOLD
+        setPadding(dp(52),dp(18),0,dp(8))
+    }
+
+    private fun applyCardFocus(v:View) {
+        v.setOnFocusChangeListener { view,focused ->
+            view.animate().scaleX(if(focused)1.10f else 1f).scaleY(if(focused)1.10f else 1f)
+                .translationZ(if(focused)dp(14).toFloat() else 0f).setDuration(130).start()
+            view.background=if(focused) GradientDrawable().apply { setStroke(dp(2),0xFFAAAAAA.toInt()); cornerRadius=dp(7).toFloat(); setColor(Color.TRANSPARENT) } else null
+        }
+    }
+
     private fun addRow(title: String, data: List<JSONObject>) {
         if(data.isEmpty()) return
-        homeRoot?.addView(TextView(this).apply {
-            text=title; setTextColor(Color.WHITE); textSize=24f; typeface=Typeface.DEFAULT_BOLD
-            setPadding(dp(52),dp(18),0,dp(8))
-        })
+        homeRoot?.addView(sectionTitle(title))
         val row=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL
             setPadding(dp(52),dp(8),dp(52),dp(22))
@@ -270,14 +318,7 @@ class MainActivity : Activity() {
                 orientation=LinearLayout.VERTICAL; isFocusable=true; isClickable=true
                 setPadding(dp(3),dp(3),dp(3),dp(3))
                 setOnClickListener { if(type=="Series") showSeries(id) else showDetails(id) }
-                setOnFocusChangeListener { v, focused ->
-                    v.animate().scaleX(if(focused)1.10f else 1f).scaleY(if(focused)1.10f else 1f)
-                        .translationZ(if(focused)dp(12).toFloat() else 0f).setDuration(130).start()
-                    v.background = if(focused) GradientDrawable().apply {
-                        setStroke(dp(3),Color.rgb(126,87,255)); cornerRadius=dp(8).toFloat()
-                        setColor(Color.TRANSPARENT)
-                    } else null
-                }
+                applyCardFocus(this)
             }
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
             card.addView(img,LinearLayout.LayoutParams(dp(176),dp(248)))
@@ -470,30 +511,27 @@ class MainActivity : Activity() {
         io.execute {
             try {
                 val x=request("/Users/$userId/Items/$id")
+                val similar=runCatching { items("/Items/$id/Similar?UserId=$userId&Limit=16&Fields=PrimaryImageAspectRatio") }.getOrDefault(emptyList())
                 runOnUiThread {
-                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(80),dp(50),dp(80),dp(50)); setBackgroundColor(Color.rgb(8,8,13)) }
-                    val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }; root.addView(img,params(260,370,0)); loadImage(img,id,"Primary",520)
-                    root.addView(TextView(this).apply { text=x.optString("Name"); textSize=34f; setTextColor(Color.WHITE); gravity=Gravity.CENTER })
-                    val year=x.optInt("ProductionYear",0)
-                    val rating=x.optDouble("CommunityRating",0.0)
-                    val runtime=x.optLong("RunTimeTicks",0L)/600_000_000L
-                    val genres=x.optJSONArray("Genres")
-                    val genreText=if(genres!=null) (0 until minOf(genres.length(),3)).joinToString(" • ") { genres.optString(it) } else ""
-                    val meta=listOfNotNull(if(year>0) year.toString() else null, if(runtime>0) "${runtime} Min." else null, if(rating>0) "★ %.1f".format(rating) else null).joinToString("  •  ")
-                    if(meta.isNotBlank()) root.addView(TextView(this).apply { text=meta; textSize=15f; setTextColor(Color.GRAY); gravity=Gravity.CENTER },params(-1,-2,8))
-                    root.addView(TextView(this).apply { text=x.optString("Overview"); textSize=16f; setTextColor(Color.LTGRAY); gravity=Gravity.CENTER; maxLines=5 }, params(-1,-2,18))
-                    val userData=x.optJSONObject("UserData")
-                    val ticks=userData?.optLong("PlaybackPositionTicks",0L) ?: 0L
-                    val favorite=userData?.optBoolean("IsFavorite",false) ?: false
-                    val played=userData?.optBoolean("Played",false) ?: false
-                    val type=x.optString("Type")
-                    root.addView(button(if(ticks>0) "▶ Fortsetzen" else "▶ Abspielen") { playNative(id,ticks) },params(260,64,22))
-                    root.addView(button(if(favorite) "✓ Meine Liste" else "+ Meine Liste") { setFavorite(id,!favorite) { showDetails(id) } },params(260,58,10))
-                    root.addView(button("Ähnliche Titel") { showSimilar(id) },params(260,58,10))
-                    if(type=="Series") root.addView(button("Zufällige Folge") { playRandomEpisode(id) },params(260,58,10))
-                    root.addView(button(if(played) "↺ Als ungesehen markieren" else "✓ Als gesehen markieren") { setPlayed(id,!played) { showDetails(id) } },params(300,58,10))
-                    root.addView(button("Zurück") { showHome() },params(220,58,10))
-                    setContentView(root)
+                    val outer=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(8,8,13)) }
+                    val hero=FrameLayout(this)
+                    val bg=ImageView(this).apply{scaleType=ImageView.ScaleType.CENTER_CROP}; hero.addView(bg,FrameLayout.LayoutParams(-1,dp(500))); loadImage(bg,id,"Backdrop",1600)
+                    hero.addView(View(this).apply{background=GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,intArrayOf(0xF708080D.toInt(),0xB008080D.toInt(),0x2208080D))},FrameLayout.LayoutParams(-1,-1))
+                    val info=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.BOTTOM;setPadding(dp(58),dp(90),dp(58),dp(42))}
+                    info.addView(TextView(this).apply{text=x.optString("Name");textSize=42f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD})
+                    val year=x.optInt("ProductionYear",0); val rating=x.optDouble("CommunityRating",0.0); val runtime=x.optLong("RunTimeTicks",0L)/600_000_000L
+                    val meta=listOfNotNull(if(year>0)year.toString()else null,if(runtime>0)"$runtime Min."else null,if(rating>0)"★ %.1f".format(rating)else null).joinToString("  •  ")
+                    if(meta.isNotBlank()) info.addView(TextView(this).apply{text=meta;textSize=16f;setTextColor(Color.LTGRAY)})
+                    info.addView(TextView(this).apply{text=x.optString("Overview");textSize=17f;setTextColor(Color.WHITE);maxLines=4;setPadding(0,dp(12),0,0)},LinearLayout.LayoutParams(dp(700),-2))
+                    val ud=x.optJSONObject("UserData"); val ticks=ud?.optLong("PlaybackPositionTicks",0L)?:0L; val fav=ud?.optBoolean("IsFavorite",false)?:false
+                    val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(20),0,0)}
+                    actions.addView(actionButton(if(ticks>0)"▶  Fortsetzen" else "▶  Abspielen",true){playNative(id,ticks)},LinearLayout.LayoutParams(dp(220),dp(58)).apply{marginEnd=dp(12)})
+                    actions.addView(actionButton(if(fav)"✓  Meine Liste" else "+  Meine Liste",false){setFavorite(id,!fav){showDetails(id)}},LinearLayout.LayoutParams(dp(220),dp(58)).apply{marginEnd=dp(12)})
+                    if(x.optString("Type")=="Series") actions.addView(actionButton("Zufällige Folge",false){playRandomEpisode(id)},LinearLayout.LayoutParams(dp(210),dp(58)))
+                    info.addView(actions); hero.addView(info,FrameLayout.LayoutParams(-1,-1)); outer.addView(hero,LinearLayout.LayoutParams(-1,dp(500)))
+                    homeRoot=outer
+                    addRow("Ähnliche Titel",similar)
+                    setContentView(ScrollView(this).apply{isVerticalScrollBarEnabled=false;addView(outer)})
                 }
             } catch(e:Exception){ runOnUiThread{toast("Details konnten nicht geladen werden")} }
         }
