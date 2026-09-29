@@ -133,7 +133,7 @@ class MainActivity : Activity() {
 
         val top=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL
-            setPadding(dp(52),dp(16),dp(44),dp(8))
+            setPadding(dp(64),dp(16),dp(44),dp(8))
             background=GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xE608080D.toInt(),0x9908080D.toInt(),0x0008080D)
@@ -267,7 +267,7 @@ class MainActivity : Activity() {
         val info=LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL
             gravity=Gravity.BOTTOM
-            setPadding(dp(58),0,dp(58),dp(50))
+            setPadding(dp(72),0,dp(58),dp(50))
         }
         val logo=ImageView(this).apply{scaleType=ImageView.ScaleType.FIT_START;visibility=View.INVISIBLE}
         info.addView(logo,LinearLayout.LayoutParams(dp(430),dp(120)))
@@ -305,7 +305,7 @@ class MainActivity : Activity() {
     private fun addContinueRow(data:List<JSONObject>) {
         if(data.isEmpty()) return
         homeRoot?.addView(sectionTitle("Weiterschauen"))
-        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(68),dp(8),dp(60),dp(30)); clipChildren=false; clipToPadding=false }
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(84),dp(12),dp(68),dp(44)); clipChildren=false; clipToPadding=false }
         data.forEach { item ->
             val id=item.optString("Id"); if(id.isBlank()) return@forEach
             val ticks=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
@@ -333,7 +333,7 @@ class MainActivity : Activity() {
     private fun addRankedRow(title:String,data:List<JSONObject>) {
         if(data.isEmpty()) return
         homeRoot?.addView(sectionTitle(title))
-        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(68),dp(8),dp(60),dp(30)); clipChildren=false }
+        val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; setPadding(dp(84),dp(12),dp(68),dp(44)); clipChildren=false; clipToPadding=false }
         data.take(10).forEachIndexed { index,item ->
             val wrap=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.BOTTOM; isFocusable=true; isClickable=true
                 setOnClickListener { if(item.optString("Type")=="Series") showSeries(item.optString("Id")) else showDetails(item.optString("Id")) }; applyCardFocus(this) }
@@ -344,12 +344,12 @@ class MainActivity : Activity() {
             wrap.addView(img,LinearLayout.LayoutParams(dp(154),dp(218))); loadImage(img,item.optString("Id"),"Primary",380)
             row.addView(wrap,LinearLayout.LayoutParams(dp(220),dp(228)).apply{marginEnd=dp(4)})
         }
-        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(246)))
+        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(300)))
     }
 
     private fun sectionTitle(label:String)=TextView(this).apply {
         text=label; setTextColor(Color.WHITE); textSize=24f; typeface=Typeface.DEFAULT_BOLD
-        setPadding(dp(68),dp(18),0,dp(8))
+        setPadding(dp(84),dp(18),0,dp(8))
     }
 
     private fun applyCardFocus(v:View) {
