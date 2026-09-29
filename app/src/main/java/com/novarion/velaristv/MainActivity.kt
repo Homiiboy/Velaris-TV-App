@@ -159,6 +159,8 @@ class MainActivity : Activity() {
                 val topTen = items("/Users/$userId/Items?Recursive=true&Limit=10&SortBy=CommunityRating&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
                 val action = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Action&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
                 val comedy = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Comedy&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val sciFi = items("/Users/$userId/Items?Recursive=true&Limit=18&Genres=Science%20Fiction&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
+                val replay = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
                 val watched = items("/Users/$userId/Items?Recursive=true&Limit=1&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
                 val becauseTitle = watched.firstOrNull()?.optString("Name").orEmpty()
                 val because = watched.firstOrNull()?.optString("Id")?.takeIf { it.isNotBlank() }?.let { watchedId ->
@@ -166,7 +168,7 @@ class MainActivity : Activity() {
                 } ?: emptyList()
                 runOnUiThread {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
-                    addHero((resume + latest).firstOrNull())
+                    addHeroCarousel((latest + recommended).distinctBy { it.optString("Id") }.take(5))
                     addContinueRow(resume)
                     if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast", because)
                     addRow("Meine Liste", favorites)
@@ -174,6 +176,8 @@ class MainActivity : Activity() {
                     addRankedRow("Top 10 in deiner Mediathek", topTen)
                     addRow("Action", action)
                     addRow("Komödien", comedy)
+                    addRow("Science-Fiction", sciFi)
+                    addRow("Noch einmal ansehen", replay)
                     addRow("Kürzlich hinzugefügt", latest)
                 }
             } catch(e: Exception) { runOnUiThread {
@@ -191,6 +195,34 @@ class MainActivity : Activity() {
         val out=mutableListOf<JSONObject>()
         if(arr!=null) for(i in 0 until arr.length()) out.add(arr.getJSONObject(i))
         return out
+    }
+
+    private fun addHeroCarousel(items:List<JSONObject>) {
+        if(items.isEmpty()) return
+        val holder=FrameLayout(this)
+        homeRoot?.addView(holder,LinearLayout.LayoutParams(-1,dp(500)).apply{bottomMargin=dp(-26)})
+        fun render(index:Int) {
+            if(destroyed || items.isEmpty()) return
+            holder.animate().alpha(0f).setDuration(150).withEndAction {
+                holder.removeAllViews()
+                val previous=homeRoot
+                val temp=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+                homeRoot=temp; addHero(items[index % items.size]); homeRoot=previous
+                if(temp.childCount>0) {
+                    val hero=temp.getChildAt(0); temp.removeView(hero)
+                    holder.addView(hero,FrameLayout.LayoutParams(-1,-1))
+                }
+                holder.animate().alpha(1f).setDuration(220).start()
+            }.start()
+        }
+        render(0)
+        if(items.size>1) holder.postDelayed(object:Runnable {
+            var index=1
+            override fun run() {
+                if(holder.isAttachedToWindow && !holder.hasFocus()) { render(index); index=(index+1)%items.size }
+                if(holder.isAttachedToWindow) holder.postDelayed(this,9000)
+            }
+        },9000)
     }
 
     private fun addHero(item: JSONObject?) {
@@ -217,15 +249,21 @@ class MainActivity : Activity() {
             )
         }
         hero.addView(shade,FrameLayout.LayoutParams(-1,-1))
+        hero.addView(View(this).apply {
+            background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,intArrayOf(0x0008080D,0x1108080D,0xF508080D.toInt()))
+        },FrameLayout.LayoutParams(-1,dp(180),Gravity.BOTTOM))
 
         val info=LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL
             gravity=Gravity.BOTTOM
             setPadding(dp(58),0,dp(58),dp(50))
         }
-        info.addView(TextView(this).apply {
-            text=title; textSize=42f; setTextColor(Color.WHITE); typeface=Typeface.DEFAULT_BOLD
-        })
+        val logo=ImageView(this).apply{scaleType=ImageView.ScaleType.FIT_START;visibility=View.INVISIBLE}
+        info.addView(logo,LinearLayout.LayoutParams(dp(430),dp(120)))
+        loadImageWithFallback(logo,id,"Logo",700) {
+            logo.visibility=View.GONE
+            info.addView(TextView(this).apply { text=title; textSize=42f; setTextColor(Color.WHITE); typeface=Typeface.DEFAULT_BOLD },0)
+        }
         val meta=listOfNotNull(
             if(year>0) year.toString() else null,
             if(rating>0) "★ %.1f".format(rating) else null
@@ -245,7 +283,8 @@ class MainActivity : Activity() {
         actions.addView(actionButton(if(ticks>0) "▶  Fortsetzen" else "▶  Abspielen",true) {
             playNative(id,ticks)
         },LinearLayout.LayoutParams(dp(220),dp(58)).apply { marginEnd=dp(12) })
-        actions.addView(actionButton("+  Meine Liste",false) { showDetails(id) },
+        val isFav=item.optJSONObject("UserData")?.optBoolean("IsFavorite",false)?:false
+        actions.addView(actionButton(if(isFav)"✓  Meine Liste" else "+  Meine Liste",false) { setFavorite(id,!isFav){showHome()} },
             LinearLayout.LayoutParams(dp(210),dp(58)))
         info.addView(actions)
         hero.addView(info,FrameLayout.LayoutParams(-1,-1))
@@ -266,7 +305,11 @@ class MainActivity : Activity() {
             }
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
             card.addView(img,LinearLayout.LayoutParams(dp(310),dp(174))); loadImage(img,id,"Backdrop",620)
-            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1; setPadding(dp(4),dp(7),0,0) },LinearLayout.LayoutParams(dp(310),dp(34)))
+            card.addView(TextView(this).apply { text=item.optString("Name"); setTextColor(Color.WHITE); textSize=15f; maxLines=1; setPadding(dp(4),dp(7),0,0) },LinearLayout.LayoutParams(dp(310),dp(30)))
+            val remaining=((total-ticks).coerceAtLeast(0L)/600_000_000L)
+            val ep=item.optInt("IndexNumber",0); val season=item.optInt("ParentIndexNumber",0)
+            val resumeMeta=listOfNotNull(if(season>0&&ep>0)"S$season:E$ep" else null,if(remaining>0)"Noch $remaining Min." else null).joinToString("  •  ")
+            if(resumeMeta.isNotBlank()) card.addView(TextView(this).apply{text=resumeMeta;textSize=12f;setTextColor(Color.GRAY);setPadding(dp(4),0,0,0)},LinearLayout.LayoutParams(dp(310),dp(24)))
             if(ticks>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
                 max=1000; progress=((ticks.toDouble()/total)*1000).toInt().coerceIn(0,1000)
                 progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(126,87,255))
@@ -283,12 +326,12 @@ class MainActivity : Activity() {
         data.take(10).forEachIndexed { index,item ->
             val wrap=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.BOTTOM; isFocusable=true; isClickable=true
                 setOnClickListener { if(item.optString("Type")=="Series") showSeries(item.optString("Id")) else showDetails(item.optString("Id")) }; applyCardFocus(this) }
-            wrap.addView(TextView(this).apply { text="${index+1}"; textSize=82f; typeface=Typeface.DEFAULT_BOLD; setTextColor(0xFF2D2D35.toInt()); gravity=Gravity.BOTTOM },LinearLayout.LayoutParams(dp(72),dp(250)))
+            wrap.addView(TextView(this).apply { text="${index+1}"; textSize=68f; typeface=Typeface.DEFAULT_BOLD; setTextColor(0xFF2D2D35.toInt()); gravity=Gravity.BOTTOM },LinearLayout.LayoutParams(dp(58),dp(218)))
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
-            wrap.addView(img,LinearLayout.LayoutParams(dp(176),dp(248))); loadImage(img,item.optString("Id"),"Primary",420)
-            row.addView(wrap,LinearLayout.LayoutParams(dp(260),dp(260)).apply{marginEnd=dp(8)})
+            wrap.addView(img,LinearLayout.LayoutParams(dp(154),dp(218))); loadImage(img,item.optString("Id"),"Primary",380)
+            row.addView(wrap,LinearLayout.LayoutParams(dp(220),dp(228)).apply{marginEnd=dp(4)})
         }
-        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(278)))
+        homeRoot?.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;clipChildren=false;addView(row)},LinearLayout.LayoutParams(-1,dp(246)))
     }
 
     private fun sectionTitle(label:String)=TextView(this).apply {
@@ -325,10 +368,7 @@ class MainActivity : Activity() {
             val img=ImageView(this).apply { scaleType=ImageView.ScaleType.CENTER_CROP }
             card.addView(img,LinearLayout.LayoutParams(dp(176),dp(248)))
             loadImage(img,id,"Primary",420)
-            card.addView(TextView(this).apply {
-                text=item.optString("Name"); setTextColor(Color.WHITE); textSize=14f; maxLines=1
-                setPadding(dp(2),dp(7),0,0)
-            },LinearLayout.LayoutParams(dp(176),dp(34)))
+            card.setOnLongClickListener { showDetails(id); true }
             val progress=item.optJSONObject("UserData")?.optLong("PlaybackPositionTicks",0L) ?: 0L
             val total=item.optLong("RunTimeTicks",0L)
             if(progress>0 && total>0) card.addView(ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
@@ -430,14 +470,20 @@ class MainActivity : Activity() {
 
     private fun showSearch() {
         rememberBack { showHome() }
-        val input=EditText(this).apply { hint="Filme und Serien suchen"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY); setSingleLine() }
-        val root=setupPage("Suche","Durchsuche deine Jellyfin-Mediathek",input)
-        root.addView(button("Suchen") {
-            val q=input.text.toString().trim()
-            if(q.isNotBlank()) search(q)
-        },params(240,60,16))
-        root.addView(button("Zurück") { showHome() },params(220,56,10))
-        setContentView(root); input.requestFocus()
+        val root=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(dp(54),dp(48),dp(54),dp(40));setBackgroundColor(Color.rgb(8,8,13))}
+        val left=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(0,0,dp(36),0)}
+        left.addView(TextView(this).apply{text="Suche";textSize=36f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD})
+        val input=EditText(this).apply{
+            hint="Titel suchen…";setTextColor(Color.WHITE);setHintTextColor(Color.GRAY);textSize=20f;setSingleLine()
+            background=GradientDrawable().apply{setColor(0xFF202026.toInt());cornerRadius=dp(10).toFloat()}
+            setPadding(dp(18),0,dp(18),0)
+            setOnEditorActionListener{_,_,_->val q=text.toString().trim();if(q.isNotBlank())search(q);true}
+        }
+        left.addView(input,LinearLayout.LayoutParams(dp(440),dp(64)).apply{topMargin=dp(24)})
+        left.addView(actionButton("Suchen",true){val q=input.text.toString().trim();if(q.isNotBlank())search(q)},LinearLayout.LayoutParams(dp(180),dp(58)).apply{topMargin=dp(16)})
+        root.addView(left,LinearLayout.LayoutParams(dp(500),-1))
+        root.addView(TextView(this).apply{text="Gib einen Film, eine Serie oder einen Anime ein.\nDie Ergebnisse erscheinen als Poster.";textSize=20f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,-1,1f))
+        setContentView(root);input.requestFocus()
     }
 
     private fun search(query:String) {
@@ -580,28 +626,54 @@ class MainActivity : Activity() {
 
     private fun showProfiles() {
         rememberBack { showHome() }
-        io.execute {
-            try {
-                val users=request("/Users","GET",null,true).optJSONArray("array")
-                runOnUiThread {
-                    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(72),dp(50),dp(72),dp(50)); setBackgroundColor(Color.rgb(8,8,13)) }
-                    root.addView(TextView(this).apply{text="Wer schaut gerade?";textSize=38f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER},params(-1,-2,0))
-                    val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(0,dp(34),0,0)}
-                    if(users!=null) for(i in 0 until users.length()) {
-                        val u=users.getJSONObject(i); val uid=u.optString("Id"); val name=u.optString("Name","Profil")
-                        val tile=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this)
-                            setOnClickListener{if(uid==userId)showHome()else{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();toast("Bitte als $name anmelden");showLogin()}}}
-                        val avatar=ImageView(this).apply{scaleType=ImageView.ScaleType.CENTER_CROP;setBackgroundColor(0xFF2A2A32.toInt())}
-                        tile.addView(avatar,LinearLayout.LayoutParams(dp(150),dp(150))); loadImage(avatar,uid,"Primary",300)
-                        tile.addView(TextView(this).apply{text=if(uid==userId)"✓ $name" else name;textSize=17f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;setPadding(0,dp(10),0,0)},LinearLayout.LayoutParams(dp(170),dp(42)))
-                        row.addView(tile,LinearLayout.LayoutParams(dp(184),dp(210)).apply{marginEnd=dp(18)})
-                    }
-                    root.addView(row)
-                    setContentView(root)
-                }
-            } catch(e:Exception) { runOnUiThread { toast("Profile konnten nicht geladen werden") } }
+        val stored=prefs.getString("velaris_profiles","").orEmpty()
+        val profiles=if(stored.isBlank()) org.json.JSONArray().apply {
+            put(JSONObject().put("name",prefs.getString("active_profile_name","Sandro")?:"Sandro").put("avatar",0))
+        } else runCatching{org.json.JSONArray(stored)}.getOrElse{org.json.JSONArray()}
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(50),dp(42),dp(50),dp(36));setBackgroundColor(Color.rgb(8,8,13))}
+        root.addView(TextView(this).apply{text="Wer schaut gerade?";textSize=38f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER},params(-1,-2,0))
+        val grid=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(0,dp(28),0,0)}
+        var row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        fun avatarColor(index:Int)=intArrayOf(0xFF6546D7.toInt(),0xFF285B8F.toInt(),0xFF8A3154.toInt(),0xFF28705C.toInt(),0xFF8A5A25.toInt(),0xFF4B4F9A.toInt(),0xFF6C3B86.toInt(),0xFF2F6D7A.toInt(),0xFF7B3E35.toInt(),0xFF495057.toInt())[index%10]
+        for(i in 0 until profiles.length()) {
+            if(i>0 && i%5==0){grid.addView(row);row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}}
+            val p=profiles.getJSONObject(i);val name=p.optString("name","Profil");val av=p.optInt("avatar",i)
+            val tile=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this)
+                setOnClickListener{prefs.edit().putString("active_profile_name",name).putInt("active_profile_avatar",av).apply();toast("Profil $name aktiv");showHome()}}
+            val face=TextView(this).apply{text=name.take(1).uppercase();textSize=48f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE);gravity=Gravity.CENTER;background=GradientDrawable().apply{setColor(avatarColor(av));cornerRadius=dp(18).toFloat()}}
+            tile.addView(face,LinearLayout.LayoutParams(dp(132),dp(132)))
+            tile.addView(TextView(this).apply{text=name;textSize=16f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;maxLines=1},LinearLayout.LayoutParams(dp(150),dp(42)))
+            row.addView(tile,LinearLayout.LayoutParams(dp(166),dp(190)).apply{marginEnd=dp(10)})
         }
+        if(profiles.length()<10){
+            val add=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this);setOnClickListener{showCreateProfile()}}
+            add.addView(TextView(this).apply{text="+";textSize=54f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;background=GradientDrawable().apply{setColor(0xFF25252C.toInt());cornerRadius=dp(18).toFloat()}},LinearLayout.LayoutParams(dp(132),dp(132)))
+            add.addView(TextView(this).apply{text="Profil hinzufügen";textSize=14f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(150),dp(42)))
+            row.addView(add,LinearLayout.LayoutParams(dp(166),dp(190)))
+        }
+        grid.addView(row);root.addView(grid);setContentView(root)
     }
+
+    private fun showCreateProfile() {
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(80),dp(50),dp(80),dp(50));setBackgroundColor(Color.rgb(8,8,13))}
+        root.addView(TextView(this).apply{text="Profil erstellen";textSize=36f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD},params(-2,-2,0))
+        val name=EditText(this).apply{hint="Profilname";setTextColor(Color.WHITE);setHintTextColor(Color.GRAY);setSingleLine();background=GradientDrawable().apply{setColor(0xFF202026.toInt());cornerRadius=dp(10).toFloat()};setPadding(dp(18),0,dp(18),0)}
+        root.addView(name,params(460,62,26))
+        root.addView(TextView(this).apply{text="Avatar auswählen";textSize=18f;setTextColor(Color.LTGRAY)},params(-2,-2,18))
+        val avatars=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        var selected=0
+        val colors=intArrayOf(0xFF6546D7.toInt(),0xFF285B8F.toInt(),0xFF8A3154.toInt(),0xFF28705C.toInt(),0xFF8A5A25.toInt(),0xFF4B4F9A.toInt(),0xFF6C3B86.toInt(),0xFF2F6D7A.toInt(),0xFF7B3E35.toInt(),0xFF495057.toInt())
+        colors.forEachIndexed{i,color->avatars.addView(TextView(this).apply{text=(i+1).toString();textSize=22f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;isFocusable=true;isClickable=true;background=GradientDrawable().apply{setColor(color);cornerRadius=dp(12).toFloat()};setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(68),dp(68)).apply{marginEnd=dp(8)})}
+        root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(avatars)},params(-1,86,12))
+        root.addView(actionButton("Profil erstellen",true){
+            val n=name.text.toString().trim();if(n.isBlank())return@actionButton toast("Profilname eingeben")
+            val arr=runCatching{org.json.JSONArray(prefs.getString("velaris_profiles","").orEmpty())}.getOrElse{org.json.JSONArray()}
+            if(arr.length()>=10)return@actionButton toast("Maximal 10 Profile")
+            arr.put(JSONObject().put("name",n).put("avatar",selected));prefs.edit().putString("velaris_profiles",arr.toString()).apply();showProfiles()
+        },params(230,58,24))
+        setContentView(root);name.requestFocus()
+    }
+
 
     private fun setPlayed(id:String, played:Boolean, done:()->Unit) {
         if(id.isBlank()) return
@@ -658,6 +730,22 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun loadImageWithFallback(view:ImageView,id:String,type:String,width:Int,onMissing:()->Unit) {
+        if(id.isBlank() || server.isBlank() || token.isBlank()) return onMissing()
+        io.execute {
+            try {
+                val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=92").openConnection() as HttpURLConnection
+                try {
+                    conn.setRequestProperty("X-Emby-Token",token);conn.connectTimeout=5000;conn.readTimeout=7000
+                    if(conn.responseCode in 200..299) {
+                        val bmp=conn.inputStream.use{android.graphics.BitmapFactory.decodeStream(it)}
+                        runOnUiThread{if(bmp!=null){view.visibility=View.VISIBLE;view.setImageBitmap(bmp)}else onMissing()}
+                    } else runOnUiThread{onMissing()}
+                } finally {conn.disconnect()}
+            } catch(_:Exception){runOnUiThread{onMissing()}}
+        }
+    }
+
     private fun request(path:String, method:String="GET", body:String?=null, auth:Boolean=true):JSONObject {
         if(server.isBlank()) throw IllegalStateException("Kein Server konfiguriert")
         val conn=URL(server+path).openConnection() as HttpURLConnection
@@ -675,19 +763,40 @@ class MainActivity : Activity() {
     }
 
     private fun showSettingsDialog() {
-        android.app.AlertDialog.Builder(this).setTitle("Velaris TV").setItems(arrayOf("Startseite","Wiedergabe-Einstellungen","Abmelden","Server ändern")) { _,w ->
-            when(w){0->showHome();1->showPlaybackSettings();2->{token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()};3->{clearConnection();showServer()}}
-        }.setNegativeButton("Abbrechen",null).show()
+        rememberBack { showHome() }
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(64),dp(44),dp(64),dp(44));setBackgroundColor(Color.rgb(8,8,13))}
+        root.addView(TextView(this).apply{text="Einstellungen";textSize=38f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD})
+        root.addView(TextView(this).apply{text="Velaris TV";textSize=16f;setTextColor(Color.GRAY);setPadding(0,dp(4),0,dp(24))})
+        val playback=settingsCard("▶","Wiedergabe","Autoplay, Intro, Rückblick und Abspann"){showPlaybackSettings()}
+        val profiles=settingsCard("●","Profile","Profile verwalten und wechseln"){showProfiles()}
+        val serverCard=settingsCard("◉","Server",server.ifBlank{"Nicht verbunden"}){clearConnection();showServer()}
+        val logout=settingsCard("↪","Abmelden","Jellyfin-Sitzung auf diesem TV beenden"){token="";userId="";prefs.edit().remove("access_token").remove("user_id").apply();showLogin()}
+        listOf(playback,profiles,serverCard,logout).forEach{root.addView(it,LinearLayout.LayoutParams(-1,dp(86)).apply{bottomMargin=dp(12)})}
+        setContentView(root)
+    }
+
+    private fun settingsCard(icon:String,title:String,sub:String,click:()->Unit)=LinearLayout(this).apply{
+        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(22),0,dp(22),0);isFocusable=true;isClickable=true
+        background=GradientDrawable().apply{setColor(0xFF18181E.toInt());cornerRadius=dp(12).toFloat()}
+        addView(TextView(this@MainActivity).apply{text=icon;textSize=26f;setTextColor(Color.WHITE);gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(54),dp(54)))
+        addView(LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),0,0,0);addView(TextView(this@MainActivity).apply{text=title;textSize=20f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD});addView(TextView(this@MainActivity).apply{text=sub;textSize=14f;setTextColor(Color.GRAY)})},LinearLayout.LayoutParams(0,-2,1f))
+        addView(TextView(this@MainActivity).apply{text="›";textSize=30f;setTextColor(Color.LTGRAY)})
+        setOnClickListener{click()};setOnFocusChangeListener{v,f->background=GradientDrawable().apply{setColor(if(f)0xFF303038.toInt() else 0xFF18181E.toInt());cornerRadius=dp(12).toFloat()};v.animate().scaleX(if(f)1.015f else 1f).scaleY(if(f)1.015f else 1f).setDuration(120).start()}
     }
 
     private fun showPlaybackSettings() {
-        val labels=arrayOf("Automatisch nächste Folge","Intro automatisch überspringen","Rückblick automatisch überspringen","Abspann automatisch überspringen")
-        val keys=arrayOf("auto_next","auto_skip_intro","auto_skip_recap","auto_skip_credits")
-        val values=BooleanArray(keys.size) { prefs.getBoolean(keys[it], it==0) }
-        android.app.AlertDialog.Builder(this).setTitle("Wiedergabe").setMultiChoiceItems(labels,values) { _,which,checked -> values[which]=checked }
-            .setPositiveButton("Speichern") { _,_ -> val e=prefs.edit(); keys.forEachIndexed { i,k -> e.putBoolean(k,values[i]) }; e.apply() }
-            .setNegativeButton("Abbrechen",null).show()
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(64),dp(44),dp(64),dp(44));setBackgroundColor(Color.rgb(8,8,13))}
+        root.addView(TextView(this).apply{text="Wiedergabe";textSize=36f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD})
+        val options=listOf("Automatisch nächste Folge" to "auto_next","Intro automatisch überspringen" to "auto_skip_intro","Rückblick automatisch überspringen" to "auto_skip_recap","Abspann automatisch überspringen" to "auto_skip_credits")
+        options.forEachIndexed{i,(label,key)->
+            val row=settingsCard(if(prefs.getBoolean(key,i==0))"●" else "○",label,if(prefs.getBoolean(key,i==0))"Ein" else "Aus"){
+                val value=!prefs.getBoolean(key,i==0);prefs.edit().putBoolean(key,value).apply();showPlaybackSettings()
+            }
+            root.addView(row,LinearLayout.LayoutParams(-1,dp(82)).apply{topMargin=dp(10)})
+        }
+        root.addView(actionButton("Zurück",false){showSettingsDialog()},params(180,56,22));setContentView(root)
     }
+
 
     private fun clearConnection(){ server="";token="";userId="";prefs.edit().clear().apply() }
     private fun setupPage(title:String,sub:String,first:View)=LinearLayout(this).apply {
