@@ -655,29 +655,22 @@ class MainActivity : Activity() {
     }
 
     private fun avatarFace(index:Int,initial:String):View {
-        val colors=intArrayOf(0xFF6546D7.toInt(),0xFFCE4D70.toInt(),0xFF2E73CC.toInt(),0xFF8745B5.toInt(),0xFF2EAE68.toInt(),0xFFF08035.toInt(),0xFFD83949.toInt(),0xFF31B8AE.toInt(),0xFFF0C52F.toInt(),0xFF737783.toInt())
-        val skin=intArrayOf(0xFFFFC29E.toInt(),0xFFE6A57D.toInt(),0xFFF4B98F.toInt(),0xFF9E6547.toInt(),0xFFD98F69.toInt())
-        return FrameLayout(this).apply {
+        val avatars=intArrayOf(
+            R.drawable.avatar_01,R.drawable.avatar_02,R.drawable.avatar_03,
+            R.drawable.avatar_04,R.drawable.avatar_05,R.drawable.avatar_06,
+            R.drawable.avatar_07,R.drawable.avatar_08,R.drawable.avatar_09,
+            R.drawable.avatar_10,R.drawable.avatar_11
+        )
+        return ImageView(this).apply {
+            scaleType=ImageView.ScaleType.CENTER_CROP
+            setImageResource(avatars[index.coerceIn(0,avatars.lastIndex)])
             clipToOutline=true
-            outlineProvider=object:android.view.ViewOutlineProvider(){override fun getOutline(v:View,o:android.graphics.Outline){o.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(16).toFloat())}}
-            setBackgroundColor(colors[index%colors.size])
-            val head=TextView(this@MainActivity).apply{
-                text=when(index%10){0->"●";1->"●";2->"●";3->"●";4->"●";5->"●";6->"●";7->"●";8->"●";else->"●"}
-                textSize=72f;setTextColor(skin[index%skin.size]);gravity=Gravity.CENTER
+            outlineProvider=object:android.view.ViewOutlineProvider(){
+                override fun getOutline(v:View,o:android.graphics.Outline){
+                    o.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(16).toFloat())
+                }
             }
-            addView(head,FrameLayout.LayoutParams(-1,-1))
-            addView(TextView(this@MainActivity).apply{
-                text=when(index%10){0->"⌣";1->"◡";2->"ᴗ";3->"⌣";4->"◡";5->"ᴗ";6->"⌣";7->"◡";8->"ᴗ";else->"⌣"}
-                textSize=30f;setTextColor(0xFF2A2020.toInt());gravity=Gravity.CENTER
-                translationY=dp(16).toFloat()
-            },FrameLayout.LayoutParams(-1,-1))
-            addView(TextView(this@MainActivity).apply{
-                text=when(index%10){0,6->"••";1,8->"•  •";2,5->"˙ ˙";3,9->"● ●";else->"• •"}
-                textSize=16f;setTextColor(0xFF241C1C.toInt());gravity=Gravity.CENTER
-                translationY=dp(-7).toFloat()
-            },FrameLayout.LayoutParams(-1,-1))
-            if(index==4 || index==9) addView(TextView(this@MainActivity).apply{text="○   ○";textSize=23f;setTextColor(0xFF18181E.toInt());gravity=Gravity.CENTER;translationY=dp(-7).toFloat()},FrameLayout.LayoutParams(-1,-1))
-            if(initial.isNotBlank()) contentDescription="Avatar $initial"
+            contentDescription=if(initial.isBlank()) "Avatar "+(index+1) else "Avatar "+initial
         }
     }
 
@@ -689,8 +682,8 @@ class MainActivity : Activity() {
         root.addView(TextView(this).apply{text="Avatar auswählen";textSize=18f;setTextColor(Color.LTGRAY)},params(-2,-2,18))
         val avatars=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         var selected=0
-        val colors=intArrayOf(0xFF6546D7.toInt(),0xFF285B8F.toInt(),0xFF8A3154.toInt(),0xFF28705C.toInt(),0xFF8A5A25.toInt(),0xFF4B4F9A.toInt(),0xFF6C3B86.toInt(),0xFF2F6D7A.toInt(),0xFF7B3E35.toInt(),0xFF495057.toInt())
-        colors.forEachIndexed{i,_->avatars.addView(avatarFace(i,"").apply{isFocusable=true;isClickable=true;setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(76),dp(76)).apply{marginEnd=dp(9)})}
+        val colors=IntArray(11){it}
+        colors.forEachIndexed{i,_->avatars.addView(avatarFace(i,"").apply{isFocusable=true;isClickable=true;applyCardFocus(this);setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(82),dp(82)).apply{marginEnd=dp(10)})}
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(avatars)},params(-1,86,12))
         root.addView(actionButton("Profil erstellen",true){
             val n=name.text.toString().trim();if(n.isBlank())return@actionButton toast("Profilname eingeben")
