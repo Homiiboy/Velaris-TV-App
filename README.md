@@ -1,7 +1,7 @@
 # Velaris TV
 
 <p align="center">
-  <img src="branding/velaris-tv-logo.webp" alt="Velaris TV" width="260">
+  <img src="branding/velaris log.png" alt="Velaris TV" width="260">
 </p>
 
 Velaris TV is a native Android TV / Google TV client with a custom Velaris interface. It connects directly to a Jellyfin server and uses Jellyfin for authentication, libraries, metadata, images and playback progress.
