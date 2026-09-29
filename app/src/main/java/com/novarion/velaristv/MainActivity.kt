@@ -122,7 +122,7 @@ class MainActivity : Activity() {
 
         val top=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL
-            setPadding(dp(48),dp(16),dp(48),dp(8))
+            setPadding(dp(34),dp(16),dp(34),dp(8))
             background=GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xE608080D.toInt(),0x9908080D.toInt(),0x0008080D)
@@ -130,16 +130,19 @@ class MainActivity : Activity() {
         }
         val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
         listOf(
-            navButton("Startseite"){showHome()},
-            navButton("Filme"){showLibrary("Filme","Movie")},
-            navButton("Serien"){showLibrary("Serien","Series")},
-            navButton("Anime"){showMediaFolderLibrary("Anime","Series")},
-            navButton("Animefilme"){showMediaFolderLibrary("Animefilme","Movie")},
-            navButton("Sammlungen"){showLibrary("Sammlungen","BoxSet")}
-        ).forEach { nav.addView(it,LinearLayout.LayoutParams(-2,dp(46)).apply{marginEnd=dp(6)}) }
+            "Startseite" to navButton("Startseite"){showHome()},
+            "Filme" to navButton("Filme"){showLibrary("Filme","Movie")},
+            "Serien" to navButton("Serien"){showLibrary("Serien","Series")},
+            "Anime" to navButton("Anime"){showMediaFolderLibrary("Anime","Series")},
+            "Animefilme" to navButton("Animefilme"){showMediaFolderLibrary("Animefilme","Movie")},
+            "Sammlungen" to navButton("Sammlungen"){showLibrary("Sammlungen","BoxSet")}
+        ).forEach { (label,button) ->
+            val width=when(label) { "Startseite"->dp(112); "Animefilme"->dp(122); "Sammlungen"->dp(132); else->dp(88) }
+            nav.addView(button,LinearLayout.LayoutParams(width,dp(46)).apply{marginEnd=dp(3)})
+        }
         top.addView(nav,LinearLayout.LayoutParams(0,dp(50),1f))
         top.addView(navButton("⌕"){showSearch()},LinearLayout.LayoutParams(dp(60),dp(46)).apply{marginEnd=dp(6)})
-        top.addView(navButton("Profil"){showProfiles()},LinearLayout.LayoutParams(dp(92),dp(46)).apply{marginEnd=dp(6)})
+        top.addView(navButton("Profil"){showProfiles()},LinearLayout.LayoutParams(dp(82),dp(46)).apply{marginEnd=dp(4)})
         top.addView(navButton("⚙"){showSettingsDialog()},LinearLayout.LayoutParams(dp(60),dp(46)))
         screen.addView(top,FrameLayout.LayoutParams(-1,dp(82),Gravity.TOP))
         setContentView(screen)
@@ -295,9 +298,8 @@ class MainActivity : Activity() {
 
     private fun applyCardFocus(v:View) {
         v.setOnFocusChangeListener { view,focused ->
-            view.animate().scaleX(if(focused)1.10f else 1f).scaleY(if(focused)1.10f else 1f)
-                .translationZ(if(focused)dp(14).toFloat() else 0f).setDuration(130).start()
-            view.background=if(focused) GradientDrawable().apply { setStroke(dp(2),0xFFAAAAAA.toInt()); cornerRadius=dp(7).toFloat(); setColor(Color.TRANSPARENT) } else null
+            view.animate().scaleX(if(focused)1.075f else 1f).scaleY(if(focused)1.075f else 1f)
+                .translationZ(if(focused)dp(14).toFloat() else 0f).setDuration(140).start()
         }
     }
 
@@ -344,23 +346,27 @@ class MainActivity : Activity() {
     private fun showMediaFolderLibrary(title:String, type:String) {
         rememberBack { showHome() }
         val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
-        root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE) })
+        root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE); typeface=Typeface.DEFAULT_BOLD })
         root.addView(ProgressBar(this))
         setContentView(ScrollView(this).apply { addView(root) })
         io.execute {
             try {
-                val folders=items("/Users/$userId/Items?SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=CollectionFolder&Fields=Path")
-                val wanted=if(title=="Animefilme") listOf("animefilme","anime filme","anime movies") else listOf("anime")
-                val folder=folders.firstOrNull { f ->
-                    val name=f.optString("Name").trim().lowercase()
-                    wanted.any { name==it } || (title=="Animefilme" && name.contains("anime") && (name.contains("film") || name.contains("movie")))
+                val views=items("/Users/$userId/Views")
+                fun normalized(value:String)=value.lowercase().replace(" ","").replace("-","").replace("_","")
+                val target=normalized(title)
+                val folder=views.firstOrNull { view ->
+                    val n=normalized(view.optString("Name"))
+                    if(target=="animefilme") n=="animefilme" || n=="animemovies" || n=="animemovie"
+                    else n=="anime" || (n.startsWith("anime") && !n.contains("film") && !n.contains("movie"))
                 }
                 val folderId=folder?.optString("Id").orEmpty()
-                val data=if(folderId.isBlank()) emptyList() else items("/Users/$userId/Items?ParentId=$folderId&Recursive=true&Limit=200&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Fields=PrimaryImageAspectRatio")
+                val data=if(folderId.isBlank()) emptyList() else items("/Users/$userId/Items?ParentId=$folderId&Recursive=true&Limit=250&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
                     root.removeViewAt(1); homeRoot=root
-                    if(folderId.isBlank()) root.addView(TextView(this).apply { text="Der Jellyfin-Medienordner „$title“ wurde nicht gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
-                    else if(data.isEmpty()) root.addView(TextView(this).apply { text="Im Medienordner „$title“ wurden keine passenden Inhalte gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    if(folderId.isBlank()) {
+                        val names=views.mapNotNull{it.optString("Name").takeIf(String::isNotBlank)}.joinToString(", ")
+                        root.addView(TextView(this).apply { text="Die Jellyfin-Bibliothek „$title“ wurde nicht gefunden.${if(names.isNotBlank()) "\nGefunden: $names" else ""}"; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    } else if(data.isEmpty()) root.addView(TextView(this).apply { text="In „$title“ wurden keine passenden Inhalte gefunden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
                     else addRow(title,data)
                 }
             } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
@@ -632,6 +638,12 @@ class MainActivity : Activity() {
 
     private fun loadImage(view:ImageView,id:String,type:String,width:Int) {
         if(id.isBlank() || server.isBlank() || token.isBlank()) return
+        view.clipToOutline=true
+        view.outlineProvider=object:android.view.ViewOutlineProvider() {
+            override fun getOutline(v:View,outline:android.graphics.Outline) {
+                outline.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(10).toFloat())
+            }
+        }
         io.execute {
             try {
                 val conn=URL("$server/Items/$id/Images/$type?maxWidth=$width&quality=90").openConnection() as HttpURLConnection
@@ -686,9 +698,9 @@ class MainActivity : Activity() {
         addView(first,params(600,62,22))
     }
     private fun navButton(label:String, click:()->Unit)=Button(this).apply {
-        text=label; contentDescription=label; isAllCaps=false; textSize=16f
+        text=label; contentDescription=label; isAllCaps=false; textSize=15f; setSingleLine(true); includeFontPadding=false
         setTextColor(Color.WHITE); isFocusable=true; isClickable=true
-        setPadding(dp(16),0,dp(16),0)
+        setPadding(dp(9),0,dp(9),0)
         background=GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
             cornerRadius=dp(7).toFloat()
