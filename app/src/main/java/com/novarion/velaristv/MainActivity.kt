@@ -352,13 +352,13 @@ class MainActivity : Activity() {
         io.execute {
             try {
                 val views=items("/Users/$userId/Views")
-                fun normalized(value:String)=value.lowercase().replace(" ","").replace("-","").replace("_","")
-                val target=normalized(title)
-                val folder=views.firstOrNull { view ->
-                    val n=normalized(view.optString("Name"))
-                    if(target=="animefilme") n=="animefilme" || n=="animemovies" || n=="animemovie"
-                    else n=="anime" || (n.startsWith("anime") && !n.contains("film") && !n.contains("movie"))
-                }
+                fun normalized(value:String)=java.text.Normalizer.normalize(value.lowercase(),java.text.Normalizer.Form.NFD)
+                    .replace(Regex("[\\u0300-\\u036f]"),"")
+                    .replace(Regex("[^a-z0-9]"),"")
+                val aliases=if(type=="Movie")
+                    listOf("animemovies","animefilme","animefilms","animefilme")
+                else listOf("anime","animes","animeserien","animeseries")
+                val folder=views.firstOrNull { view -> aliases.contains(normalized(view.optString("Name"))) }
                 val folderId=folder?.optString("Id").orEmpty()
                 val data=if(folderId.isBlank()) emptyList() else items("/Users/$userId/Items?ParentId=$folderId&Recursive=true&Limit=250&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Fields=PrimaryImageAspectRatio")
                 runOnUiThread {
