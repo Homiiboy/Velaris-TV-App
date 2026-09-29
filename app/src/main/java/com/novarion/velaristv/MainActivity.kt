@@ -41,7 +41,7 @@ class MainActivity : Activity() {
         when {
             server.isBlank() -> showServer()
             token.isBlank() || userId.isBlank() -> showLogin()
-            else -> showHome()
+            else -> showProfiles(true)
         }
     }
 
@@ -624,8 +624,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showProfiles() {
-        rememberBack { showHome() }
+    private fun showProfiles(startup:Boolean=false) {
+        if(!startup) rememberBack { showHome() }
         val stored=prefs.getString("velaris_profiles","").orEmpty()
         val profiles=if(stored.isBlank()) org.json.JSONArray().apply {
             put(JSONObject().put("name",prefs.getString("active_profile_name","Sandro")?:"Sandro").put("avatar",0))
@@ -640,7 +640,7 @@ class MainActivity : Activity() {
             val p=profiles.getJSONObject(i);val name=p.optString("name","Profil");val av=p.optInt("avatar",i)
             val tile=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;isFocusable=true;isClickable=true;applyCardFocus(this)
                 setOnClickListener{prefs.edit().putString("active_profile_name",name).putInt("active_profile_avatar",av).apply();toast("Profil $name aktiv");showHome()}}
-            val face=TextView(this).apply{text=name.take(1).uppercase();textSize=48f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE);gravity=Gravity.CENTER;background=GradientDrawable().apply{setColor(avatarColor(av));cornerRadius=dp(18).toFloat()}}
+            val face=avatarFace(av,name.take(1).uppercase())
             tile.addView(face,LinearLayout.LayoutParams(dp(132),dp(132)))
             tile.addView(TextView(this).apply{text=name;textSize=16f;setTextColor(Color.LTGRAY);gravity=Gravity.CENTER;maxLines=1},LinearLayout.LayoutParams(dp(150),dp(42)))
             row.addView(tile,LinearLayout.LayoutParams(dp(166),dp(190)).apply{marginEnd=dp(10)})
@@ -654,6 +654,33 @@ class MainActivity : Activity() {
         grid.addView(row);root.addView(grid);setContentView(root)
     }
 
+    private fun avatarFace(index:Int,initial:String):View {
+        val colors=intArrayOf(0xFF6546D7.toInt(),0xFFCE4D70.toInt(),0xFF2E73CC.toInt(),0xFF8745B5.toInt(),0xFF2EAE68.toInt(),0xFFF08035.toInt(),0xFFD83949.toInt(),0xFF31B8AE.toInt(),0xFFF0C52F.toInt(),0xFF737783.toInt())
+        val skin=intArrayOf(0xFFFFC29E.toInt(),0xFFE6A57D.toInt(),0xFFF4B98F.toInt(),0xFF9E6547.toInt(),0xFFD98F69.toInt())
+        return FrameLayout(this).apply {
+            clipToOutline=true
+            outlineProvider=object:android.view.ViewOutlineProvider(){override fun getOutline(v:View,o:android.graphics.Outline){o.setRoundRect(0,0,v.width.coerceAtLeast(1),v.height.coerceAtLeast(1),dp(16).toFloat())}}
+            setBackgroundColor(colors[index%colors.size])
+            val head=TextView(this@MainActivity).apply{
+                text=when(index%10){0->"●";1->"●";2->"●";3->"●";4->"●";5->"●";6->"●";7->"●";8->"●";else->"●"}
+                textSize=72f;setTextColor(skin[index%skin.size]);gravity=Gravity.CENTER
+            }
+            addView(head,FrameLayout.LayoutParams(-1,-1))
+            addView(TextView(this@MainActivity).apply{
+                text=when(index%10){0->"⌣";1->"◡";2->"ᴗ";3->"⌣";4->"◡";5->"ᴗ";6->"⌣";7->"◡";8->"ᴗ";else->"⌣"}
+                textSize=30f;setTextColor(0xFF2A2020.toInt());gravity=Gravity.CENTER
+                translationY=dp(16).toFloat()
+            },FrameLayout.LayoutParams(-1,-1))
+            addView(TextView(this@MainActivity).apply{
+                text=when(index%10){0,6->"••";1,8->"•  •";2,5->"˙ ˙";3,9->"● ●";else->"• •"}
+                textSize=16f;setTextColor(0xFF241C1C.toInt());gravity=Gravity.CENTER
+                translationY=dp(-7).toFloat()
+            },FrameLayout.LayoutParams(-1,-1))
+            if(index==4 || index==9) addView(TextView(this@MainActivity).apply{text="○   ○";textSize=23f;setTextColor(0xFF18181E.toInt());gravity=Gravity.CENTER;translationY=dp(-7).toFloat()},FrameLayout.LayoutParams(-1,-1))
+            if(initial.isNotBlank()) contentDescription="Avatar $initial"
+        }
+    }
+
     private fun showCreateProfile() {
         val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(80),dp(50),dp(80),dp(50));setBackgroundColor(Color.rgb(8,8,13))}
         root.addView(TextView(this).apply{text="Profil erstellen";textSize=36f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD},params(-2,-2,0))
@@ -663,7 +690,7 @@ class MainActivity : Activity() {
         val avatars=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         var selected=0
         val colors=intArrayOf(0xFF6546D7.toInt(),0xFF285B8F.toInt(),0xFF8A3154.toInt(),0xFF28705C.toInt(),0xFF8A5A25.toInt(),0xFF4B4F9A.toInt(),0xFF6C3B86.toInt(),0xFF2F6D7A.toInt(),0xFF7B3E35.toInt(),0xFF495057.toInt())
-        colors.forEachIndexed{i,color->avatars.addView(TextView(this).apply{text=(i+1).toString();textSize=22f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;isFocusable=true;isClickable=true;background=GradientDrawable().apply{setColor(color);cornerRadius=dp(12).toFloat()};setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(68),dp(68)).apply{marginEnd=dp(8)})}
+        colors.forEachIndexed{i,_->avatars.addView(avatarFace(i,"").apply{isFocusable=true;isClickable=true;setOnClickListener{selected=i}},LinearLayout.LayoutParams(dp(76),dp(76)).apply{marginEnd=dp(9)})}
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(avatars)},params(-1,86,12))
         root.addView(actionButton("Profil erstellen",true){
             val n=name.text.toString().trim();if(n.isBlank())return@actionButton toast("Profilname eingeben")
