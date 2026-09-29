@@ -127,14 +127,17 @@ class MainActivity : Activity() {
         val homeButton = navButton("Startseite") { showHome() }
         val moviesButton = navButton("Filme") { showLibrary("Filme","Movie") }
         val seriesButton = navButton("Serien") { showLibrary("Serien","Series") }
-        val listButton = navButton("Meine Liste") { showFavorites() }
-        val searchButton = navButton("Suche") { showSearch() }
-        listOf(homeButton,moviesButton,seriesButton,listButton,searchButton).forEach {
+        val animeButton = navButton("Anime") { showGenreLibrary("Anime","Series") }
+        val animeMoviesButton = navButton("Animefilme") { showGenreLibrary("Animefilme","Movie") }
+        val collectionsButton = navButton("Sammlungen") { showLibrary("Sammlungen","BoxSet") }
+        listOf(homeButton,moviesButton,seriesButton,animeButton,animeMoviesButton,collectionsButton).forEach {
             nav.addView(it, LinearLayout.LayoutParams(-2,dp(48)).apply { marginEnd=dp(8) })
         }
         top.addView(nav, LinearLayout.LayoutParams(0,dp(52),1f))
+        val search = navButton("⌕") { showSearch() }
         val profile = navButton("Profil") { showProfiles() }
         val settings = navButton("⚙") { showSettingsDialog() }
+        top.addView(search, LinearLayout.LayoutParams(dp(64),dp(48)).apply { marginEnd=dp(8) })
         top.addView(profile, LinearLayout.LayoutParams(dp(96),dp(48)).apply { marginEnd=dp(8) })
         top.addView(settings, LinearLayout.LayoutParams(dp(64),dp(48)))
         root.addView(top, LinearLayout.LayoutParams(-1,dp(82)))
@@ -159,11 +162,17 @@ class MainActivity : Activity() {
                 val series = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Series&Fields=PrimaryImageAspectRatio")
                 val favorites = items("/Users/$userId/Items?Recursive=true&Limit=18&Filters=IsFavorite&IncludeItemTypes=Movie,Series&Fields=PrimaryImageAspectRatio")
                 val recommended = items("/Users/$userId/Items?Recursive=true&Limit=18&SortBy=CommunityRating,DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsNotFolder&Fields=PrimaryImageAspectRatio,CommunityRating")
+                val watched = items("/Users/$userId/Items?Recursive=true&Limit=1&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie,Series&Filters=IsPlayed&Fields=PrimaryImageAspectRatio")
+                val becauseTitle = watched.firstOrNull()?.optString("Name").orEmpty()
+                val because = watched.firstOrNull()?.optString("Id")?.takeIf { it.isNotBlank() }?.let { watchedId ->
+                    runCatching { items("/Items/$watchedId/Similar?UserId=$userId&Limit=18&Fields=PrimaryImageAspectRatio,CommunityRating") }.getOrDefault(emptyList())
+                } ?: emptyList()
                 runOnUiThread {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
                     addRow("Neu bei Velaris", latest)
+                    if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast", because)
                     addRow("Meine Liste", favorites)
                     addRow("Für dich", recommended)
                     addRow("Filme", movies)
@@ -294,6 +303,24 @@ class MainActivity : Activity() {
         },LinearLayout.LayoutParams(-1,dp(320)))
     }
 
+
+    private fun showGenreLibrary(title:String, type:String) {
+        rememberBack { showHome() }
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(48),dp(28),dp(48),dp(28)); setBackgroundColor(Color.rgb(8,8,13)) }
+        root.addView(TextView(this).apply { text=title; textSize=32f; setTextColor(Color.WHITE) })
+        root.addView(ProgressBar(this))
+        setContentView(ScrollView(this).apply { addView(root) })
+        io.execute {
+            try {
+                val data=items("/Users/$userId/Items?Recursive=true&Limit=100&SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=$type&Genres=Anime&Fields=PrimaryImageAspectRatio")
+                runOnUiThread {
+                    root.removeViewAt(1); homeRoot=root
+                    if(data.isEmpty()) root.addView(TextView(this).apply { text="Keine $title gefunden. Prüfe, ob deine Jellyfin-Titel das Genre „Anime“ verwenden."; textSize=18f; setTextColor(Color.LTGRAY); setPadding(0,dp(24),0,dp(24)) })
+                    else addRow(title,data)
+                }
+            } catch(e:Exception){ runOnUiThread{toast("$title konnten nicht geladen werden")} }
+        }
+    }
 
     private fun showLibrary(title:String, type:String) {
         rememberBack { showHome() }
