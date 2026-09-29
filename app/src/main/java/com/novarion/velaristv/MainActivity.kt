@@ -23,7 +23,8 @@ import java.util.concurrent.Executors
 @UnstableApi
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("velaris_tv", MODE_PRIVATE) }
-    private val io = Executors.newFixedThreadPool(4)
+    private val io = Executors.newFixedThreadPool(6)
+    private val imageCache = android.util.LruCache<String,android.graphics.Bitmap>(24 * 1024 * 1024)
     private var server = ""
     private var token = ""
     private var userId = ""
@@ -784,6 +785,8 @@ class MainActivity : Activity() {
 
     private fun loadImage(view:ImageView,id:String,type:String,width:Int) {
         if(id.isBlank() || server.isBlank() || token.isBlank()) return
+        val cacheKey="$id:$type:$width"
+        imageCache.get(cacheKey)?.let { view.setImageBitmap(it); return }
         view.clipToOutline=true
         view.outlineProvider=object:android.view.ViewOutlineProvider() {
             override fun getOutline(v:View,outline:android.graphics.Outline) {
@@ -797,7 +800,7 @@ class MainActivity : Activity() {
                 try {
                     if(conn.responseCode in 200..299) {
                         val bmp=conn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
-                        if(bmp != null && !destroyed) runOnUiThread { if(!isFinishing && !isDestroyed) view.setImageBitmap(bmp) }
+                        if(bmp != null && !destroyed) { imageCache.put(cacheKey,bmp); runOnUiThread { if(!isFinishing && !isDestroyed) view.setImageBitmap(bmp) } }
                     }
                 } finally { conn.disconnect() }
             } catch(_:Exception){}
