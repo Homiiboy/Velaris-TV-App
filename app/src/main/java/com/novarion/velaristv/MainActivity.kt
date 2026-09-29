@@ -171,12 +171,12 @@ class MainActivity : Activity() {
                     homeRoot?.let { if (it.childCount > 2) it.removeViews(2, it.childCount - 2) }
                     addHero((resume + latest).firstOrNull())
                     addRow("Weiterschauen", resume)
-                    addRow("Neu bei Velaris", latest)
                     if(becauseTitle.isNotBlank()) addRow("Weil du „$becauseTitle“ gesehen hast", because)
                     addRow("Meine Liste", favorites)
                     addRow("Für dich", recommended)
                     addRow("Filme", movies)
                     addRow("Serien", series)
+                    addRow("Kürzlich hinzugefügt", latest)
                 }
             } catch(e: Exception) { runOnUiThread {
                 val root=homeRoot ?: return@runOnUiThread
